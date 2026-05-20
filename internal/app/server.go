@@ -122,6 +122,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/debug/db", s.handleDebugDB)
 	s.mux.HandleFunc("/api/monitoring/health", s.handleMonitoringHealth)
 	s.mux.HandleFunc("/v1/chat/completions", s.handleProxy)
+	s.mux.HandleFunc("/v1/completions", s.handleProxy)
 	s.mux.HandleFunc("/v1/messages", s.handleProxy)
 	s.mux.HandleFunc("/v1/messages/count_tokens", s.handleProxy)
 	s.mux.HandleFunc("/v1/responses", s.handleProxy)
