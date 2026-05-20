@@ -151,7 +151,7 @@ func resolveEndpoint(c store.ProviderConnection, model, path string) (string, st
 		}
 	}
 
-	if path == "/v1/responses" || path == "/v1/responses/compact" || path == "/backend-api/codex/responses" || apiType == "responses" {
+	if path == "/v1/responses" || path == "/v1/responses/compact" || path == "/v1/responses/stream" || path == "/backend-api/codex/responses" || apiType == "responses" {
 		return joinOpenAIEndpoint(baseURL, "/responses"), "openai", nil
 	}
 	if path == "/v1/completions" {

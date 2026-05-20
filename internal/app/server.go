@@ -127,6 +127,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/v1/messages/count_tokens", s.handleProxy)
 	s.mux.HandleFunc("/v1/responses", s.handleProxy)
 	s.mux.HandleFunc("/v1/responses/compact", s.handleProxy)
+	s.mux.HandleFunc("/v1/responses/stream", s.handleProxy)
 	s.mux.HandleFunc("/backend-api/codex/responses", s.handleProxy)
 	s.mux.HandleFunc("/v1/search", s.handleSearch)
 	s.mux.HandleFunc("/v1/embeddings", s.handleMediaProxy)
@@ -2365,6 +2366,15 @@ func (s *Server) handleProxy(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "failed to read body"})
 		return
+	}
+	if r.URL.Path == "/v1/responses/stream" {
+		var payload map[string]interface{}
+		if err := json.Unmarshal(body, &payload); err == nil {
+			payload["stream"] = true
+			if raw, err := json.Marshal(payload); err == nil {
+				body = raw
+			}
+		}
 	}
 	if disabledModel, ok := s.resolveDisabledModel(body); ok {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "model is disabled", "model": disabledModel})
