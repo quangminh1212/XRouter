@@ -54,7 +54,7 @@ Reference repos:
 - [x] OpenAI responses
 - [x] OpenAI legacy completions
 - [x] Claude count tokens
-- [ ] Gemini-compatible `v1beta/models/*action`
+- [x] Gemini-compatible `v1beta/models/*action`
 - [x] Responses compact variant
 - [x] Responses websocket/stream alias
 - [x] Codex direct alias routes such as `/backend-api/codex/responses`
