@@ -81,29 +81,55 @@ func TestCreateWave2ProviderFillsDefaults(t *testing.T) {
 }
 
 func TestCreateWave3ProviderFillsDefaults(t *testing.T) {
-	srv := newTestServer(t)
-	body := bytes.NewBufferString(`{"provider":"moonshot","name":"Moonshot test","apiKey":"secret"}`)
-	req := httptest.NewRequest(http.MethodPost, "/api/providers", body)
-	rec := httptest.NewRecorder()
+	tests := []struct {
+		provider string
+		baseURL  string
+	}{
+		{provider: "glm-cn", baseURL: "https://open.bigmodel.cn/api/paas/v4"},
+		{provider: "minimax-cn", baseURL: "https://api.minimax.chat/v1"},
+		{provider: "moonshot", baseURL: "https://api.moonshot.ai/v1"},
+		{provider: "hyperbolic", baseURL: "https://api.hyperbolic.xyz/v1"},
+		{provider: "novita", baseURL: "https://api.novita.ai/v3/openai"},
+		{provider: "sambanova", baseURL: "https://api.sambanova.ai/v1"},
+		{provider: "chutes", baseURL: "https://llm.chutes.ai/v1"},
+		{provider: "lambda-ai", baseURL: "https://api.lambda.ai/v1"},
+		{provider: "featherless-ai", baseURL: "https://api.featherless.ai/v1"},
+		{provider: "kluster", baseURL: "https://api.kluster.ai/v1"},
+		{provider: "reka", baseURL: "https://api.reka.ai/v1"},
+		{provider: "zai", baseURL: "https://api.z.ai/api/paas/v4"},
+		{provider: "qwen", baseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1"},
+		{provider: "opencode", baseURL: "https://api.opencode.ai/v1"},
+		{provider: "opencode-go", baseURL: "https://api.opencode.ai/v1"},
+		{provider: "opencode-zen", baseURL: "https://api.opencode.ai/v1"},
+		{provider: "kiro", baseURL: "https://api.kiro.dev/v1"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.provider, func(t *testing.T) {
+			srv := newTestServer(t)
+			body := bytes.NewBufferString(`{"provider":"` + tt.provider + `","name":"` + tt.provider + ` test","apiKey":"secret"}`)
+			req := httptest.NewRequest(http.MethodPost, "/api/providers", body)
+			rec := httptest.NewRecorder()
 
-	srv.ServeHTTP(rec, req)
+			srv.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusCreated {
-		t.Fatalf("expected 201, got %d: %s", rec.Code, rec.Body.String())
-	}
-	var got map[string]interface{}
-	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
-		t.Fatalf("decode response: %v", err)
-	}
-	data, ok := got["providerSpecificData"].(map[string]interface{})
-	if !ok {
-		t.Fatalf("expected providerSpecificData in response: %#v", got)
-	}
-	if data["baseUrl"] != "https://api.moonshot.ai/v1" {
-		t.Fatalf("unexpected baseUrl: %#v", data["baseUrl"])
-	}
-	if data["apiType"] != "openai" {
-		t.Fatalf("unexpected apiType: %#v", data["apiType"])
+			if rec.Code != http.StatusCreated {
+				t.Fatalf("expected 201, got %d: %s", rec.Code, rec.Body.String())
+			}
+			var got map[string]interface{}
+			if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+				t.Fatalf("decode response: %v", err)
+			}
+			data, ok := got["providerSpecificData"].(map[string]interface{})
+			if !ok {
+				t.Fatalf("expected providerSpecificData in response: %#v", got)
+			}
+			if data["baseUrl"] != tt.baseURL {
+				t.Fatalf("unexpected baseUrl: %#v", data["baseUrl"])
+			}
+			if data["apiType"] != "openai" {
+				t.Fatalf("unexpected apiType: %#v", data["apiType"])
+			}
+		})
 	}
 }
 
