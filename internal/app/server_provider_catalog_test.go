@@ -121,3 +121,39 @@ func TestProviderCatalogIncludesSearchAliases(t *testing.T) {
 		}
 	}
 }
+
+func TestProviderCatalogIncludesWebCookieProviders(t *testing.T) {
+	srv := newTestServer(t)
+	req := httptest.NewRequest(http.MethodGet, "/api/providers/catalog?authType=web_cookie", nil)
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	var payload struct {
+		Providers []store.ProviderCatalogEntry `json:"providers"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	expected := map[string]string{
+		"chatgpt-web":    "https://chatgpt.com/backend-api",
+		"gemini-web":     "https://gemini.google.com",
+		"deepseek-web":   "https://chat.deepseek.com",
+		"grok-web":       "https://grok.com",
+		"perplexity-web": "https://www.perplexity.ai",
+		"copilot-web":    "https://copilot.microsoft.com",
+	}
+	seen := map[string]string{}
+	for _, provider := range payload.Providers {
+		if provider.AuthType != "web_cookie" {
+			t.Fatalf("unexpected filtered provider: %#v", provider)
+		}
+		seen[provider.Provider] = provider.BaseURL
+	}
+	for name, baseURL := range expected {
+		if got := seen[name]; got != baseURL {
+			t.Fatalf("expected %s baseUrl %s, got %q", name, baseURL, got)
+		}
+	}
+}

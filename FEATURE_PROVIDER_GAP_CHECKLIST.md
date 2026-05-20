@@ -395,7 +395,7 @@ Legend:
 | `cablyai` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `cartesia` | 9router, OmniRoute | apiKey, audio_only | NO | Need adapter/auth/base URL/model transform |
 | `cerebras` | 9router, OmniRoute | apiKey, apikey | NO | Need adapter/auth/base URL/model transform |
-| `chatgpt-web` | OmniRoute | web_cookie | NO | Need adapter/auth/base URL/model transform |
+| `chatgpt-web` | OmniRoute | web_cookie | YES | Added web-cookie catalog metadata + cookie-import default hydration |
 | `chutes` | 9router, OmniRoute | apiKey, apikey | YES | Added Wave 3 OpenAI-compatible catalog + fallback model |
 | `clarifai` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `claude` | 9router, CLIProxyAPI, OmniRoute | core/oauth/sdk, oauth | NO | Need adapter/auth/base URL/model transform |
@@ -410,7 +410,7 @@ Legend:
 | `command-code` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `commandcode` | 9router | apiKey | NO | Need adapter/auth/base URL/model transform |
 | `completions` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
-| `copilot-web` | OmniRoute | web_cookie | NO | Need adapter/auth/base URL/model transform |
+| `copilot-web` | OmniRoute | web_cookie | YES | Added web-cookie catalog metadata + cookie-import default hydration |
 | `coqui` | 9router | apiKey | NO | Need adapter/auth/base URL/model transform |
 | `crof` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `cursor` | 9router, OmniRoute | oauth | NO | Need adapter/auth/base URL/model transform |
@@ -419,7 +419,7 @@ Legend:
 | `deepgram` | 9router, OmniRoute | apiKey, audio_only | NO | Need adapter/auth/base URL/model transform |
 | `deepinfra` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `deepseek` | 9router, OmniRoute | apiKey, apikey | NO | Need adapter/auth/base URL/model transform |
-| `deepseek-web` | OmniRoute | web_cookie | NO | Need adapter/auth/base URL/model transform |
+| `deepseek-web` | OmniRoute | web_cookie | YES | Added web-cookie catalog metadata + cookie-import default hydration |
 | `devin` | OmniRoute | cloud_agent | NO | Need adapter/auth/base URL/model transform |
 | `devin-cli` | OmniRoute | oauth | NO | Need adapter/auth/base URL/model transform |
 | `docker-model-runner` | OmniRoute | local | NO | Need adapter/auth/base URL/model transform |
@@ -439,7 +439,7 @@ Legend:
 | `galadriel` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `gemini` | 9router, CLIProxyAPI, OmniRoute | apikey, core/oauth/sdk, freeTier | NO | Need adapter/auth/base URL/model transform |
 | `gemini-cli` | 9router, OmniRoute | free | NO | Need adapter/auth/base URL/model transform |
-| `gemini-web` | OmniRoute | web_cookie | NO | Need adapter/auth/base URL/model transform |
+| `gemini-web` | OmniRoute | web_cookie | YES | Added web-cookie catalog metadata + cookie-import default hydration |
 | `getgoapi` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `gigachat` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `github` | 9router, OmniRoute | oauth | NO | Need adapter/auth/base URL/model transform |
@@ -456,7 +456,7 @@ Legend:
 | `google-pse-search` | OmniRoute | search | YES | Added Google Programmable Search adapter + catalog coverage |
 | `google-tts` | 9router | apiKey | NO | Need adapter/auth/base URL/model transform |
 | `grok` | CLIProxyAPI | core/oauth/sdk | YES | Added OAuth catalog alias to xAI flow + fallback model |
-| `grok-web` | 9router, OmniRoute | webCookie, web_cookie | NO | Need adapter/auth/base URL/model transform |
+| `grok-web` | 9router, OmniRoute | webCookie, web_cookie | YES | Added web-cookie catalog metadata + cookie-import default hydration |
 | `groq` | 9router, OmniRoute | apiKey, apikey | NO | Need adapter/auth/base URL/model transform |
 | `hackclub` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `haiper` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
@@ -524,7 +524,7 @@ Legend:
 | `ovhcloud` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `perplexity` | 9router, OmniRoute | apiKey, apikey | NO | Need adapter/auth/base URL/model transform |
 | `perplexity-search` | OmniRoute | search | YES | Search provider catalog + adapter already present |
-| `perplexity-web` | 9router, OmniRoute | webCookie, web_cookie | NO | Need adapter/auth/base URL/model transform |
+| `perplexity-web` | 9router, OmniRoute | webCookie, web_cookie | YES | Added web-cookie catalog metadata + cookie-import default hydration |
 | `petals` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `piapi` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `playht` | 9router, OmniRoute | apiKey, audio_only | NO | Need adapter/auth/base URL/model transform |
