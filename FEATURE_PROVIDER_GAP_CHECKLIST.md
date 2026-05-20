@@ -71,7 +71,7 @@ Reference repos:
 - [ ] Video edits/extensions/retrieve
 - [ ] Music/audio generation
 - [ ] Web search endpoint
-- [ ] Web fetch endpoint
+- [x] Web fetch endpoint
 - [x] Voice listing endpoints
 
 ### 3) Management API depth
