@@ -26,3 +26,27 @@ $env:XROUTER_ADDR=':1214'; go run ./cmd/xrouter
 - `POST /v1/chat/completions`
 - `POST /v1/messages`
 - `POST /v1/responses`
+
+## Observability
+
+- `GET /api/usage/stats` — aggregated counts/cost by provider, model and day.
+- `GET /api/usage/logs?limit=100` — recent request logs.
+- `GET /api/usage/logs/{id}` — full request log entry by id.
+- `GET /api/usage/history?provider=` — usage history rows.
+- `GET /api/usage/stream?limit=50` — Server-Sent Events stream emitting `snapshot`, `update` and `heartbeat` events. Add `?once=1` to receive a single snapshot frame and close.
+
+## Local Dashboard
+
+- `GET /dashboard` (localhost only) renders an embedded HTML page that consumes `/api/usage/stats`, `/api/usage/logs` and `/api/usage/stream` for a live view of activity.
+
+## Tests and CI
+
+Run the full suite locally:
+
+```powershell
+gofmt -l .
+go test ./...
+go build ./cmd/xrouter
+```
+
+The repository ships with `.github/workflows/ci.yml` which runs `gofmt`, `go test ./...` and `go build ./cmd/xrouter` on every push and pull request to `main`.
