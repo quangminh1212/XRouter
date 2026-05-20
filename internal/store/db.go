@@ -499,6 +499,63 @@ func (s *Store) ValidateAPIKey(key string) bool {
 	return false
 }
 
+func maskAPIKey(raw string) string {
+	trimmed := strings.TrimSpace(raw)
+	if len(trimmed) <= 8 {
+		return "********"
+	}
+	return trimmed[:4] + "..." + trimmed[len(trimmed)-4:]
+}
+
+func (s *Store) GetAPIKeys() []APIKey {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]APIKey, len(s.db.APIKeys))
+	for i, key := range s.db.APIKeys {
+		key.Key = maskAPIKey(key.Key)
+		out[i] = key
+	}
+	return out
+}
+
+func (s *Store) CreateAPIKey(name, key string) (APIKey, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	name = strings.TrimSpace(name)
+	key = strings.TrimSpace(key)
+	if key == "" {
+		return APIKey{}, fmt.Errorf("api key is required")
+	}
+	now := time.Now().UTC().Format(time.RFC3339)
+	item := APIKey{
+		ID:        randID("key_"),
+		Key:       key,
+		Name:      name,
+		CreatedAt: now,
+	}
+	s.db.APIKeys = append(s.db.APIKeys, item)
+	return item, s.persistLocked()
+}
+
+func (s *Store) DeleteAPIKey(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	next := s.db.APIKeys[:0]
+	found := false
+	for _, item := range s.db.APIKeys {
+		if item.ID == id {
+			found = true
+			continue
+		}
+		next = append(next, item)
+	}
+	if !found {
+		return fmt.Errorf("api key not found")
+	}
+	s.db.APIKeys = next
+	return s.persistLocked()
+}
+
 func (s *Store) GetModelAliases() map[string]string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
