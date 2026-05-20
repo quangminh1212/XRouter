@@ -108,6 +108,17 @@ func TestResolveEndpointAzureUsesDeployment(t *testing.T) {
 	}
 }
 
+func TestSetAuthHeaderClarifaiUsesKeyScheme(t *testing.T) {
+	req, err := http.NewRequest(http.MethodPost, "https://api.clarifai.com/v2/ext/openai/v1/chat/completions", nil)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	setAuthHeader(req, store.ProviderConnection{Provider: "clarifai", APIKey: "pat-123"}, "openai")
+	if got := req.Header.Get("Authorization"); got != "Key pat-123" {
+		t.Fatalf("expected Clarifai Key auth, got %q", got)
+	}
+}
+
 func TestNormalizeModelForWave1Provider(t *testing.T) {
 	body := map[string]interface{}{"model": "deepseek/deepseek-chat"}
 	raw := normalizeModelForUpstream(body, "deepseek")

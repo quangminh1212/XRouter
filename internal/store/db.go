@@ -62,6 +62,7 @@ var providerCatalog = map[string]ProviderCatalogEntry{
 	"featherless-ai":       {Provider: "featherless-ai", AuthType: "apikey", APIType: "openai", BaseURL: "https://api.featherless.ai/v1", FallbackModels: []string{"featherless-ai/Qwen/Qwen2.5-Coder-32B-Instruct"}},
 	"kluster":              {Provider: "kluster", AuthType: "apikey", APIType: "openai", BaseURL: "https://api.kluster.ai/v1", FallbackModels: []string{"kluster/meta-llama/Meta-Llama-3.1-70B-Instruct"}},
 	"nebius":               {Provider: "nebius", AuthType: "apikey", APIType: "openai", BaseURL: "https://api.studio.nebius.ai/v1", FallbackModels: []string{"nebius/Qwen/Qwen3-Coder-480B-A35B-Instruct"}},
+	"clarifai":             {Provider: "clarifai", AuthType: "apikey", APIType: "openai", BaseURL: "https://api.clarifai.com/v2/ext/openai/v1", FallbackModels: []string{"clarifai/openai/chat-completion/models/gpt-4o-mini"}},
 	"reka":                 {Provider: "reka", AuthType: "apikey", APIType: "openai", BaseURL: "https://api.reka.ai/v1", FallbackModels: []string{"reka/reka-core"}},
 	"zai":                  {Provider: "zai", AuthType: "apikey", APIType: "openai", BaseURL: "https://api.z.ai/api/paas/v4", FallbackModels: []string{"zai/glm-4.7"}},
 	"qwen":                 {Provider: "qwen", AuthType: "apikey", APIType: "openai", BaseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1", FallbackModels: []string{"qwen/qwen-plus"}},

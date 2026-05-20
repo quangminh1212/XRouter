@@ -37,6 +37,7 @@ func TestProviderCatalogEndpoint(t *testing.T) {
 		"cloudflare-ai":  "https://api.cloudflare.com/client/v4/accounts/{accountId}/ai/v1",
 		"glm-cn":         "https://open.bigmodel.cn/api/paas/v4",
 		"nebius":         "https://api.studio.nebius.ai/v1",
+		"clarifai":       "https://api.clarifai.com/v2/ext/openai/v1",
 		"opencode":       "https://api.opencode.ai/v1",
 		"kiro":           "https://api.kiro.dev/v1",
 		"reka":           "https://api.reka.ai/v1",

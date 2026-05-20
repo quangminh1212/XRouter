@@ -319,6 +319,9 @@ func setAuthHeader(req *http.Request, c store.ProviderConnection, mode string) {
 		req.Header.Set("api-key", c.APIKey)
 		req.Header.Del("Authorization")
 	}
+	if c.Provider == "clarifai" && c.APIKey != "" {
+		req.Header.Set("Authorization", "Key "+c.APIKey)
+	}
 	if c.AccessToken != "" && c.APIKey == "" {
 		req.Header.Set("Authorization", "Bearer "+c.AccessToken)
 	}
