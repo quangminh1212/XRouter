@@ -80,6 +80,33 @@ func TestCreateWave2ProviderFillsDefaults(t *testing.T) {
 	}
 }
 
+func TestCreateWave3ProviderFillsDefaults(t *testing.T) {
+	srv := newTestServer(t)
+	body := bytes.NewBufferString(`{"provider":"moonshot","name":"Moonshot test","apiKey":"secret"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/providers", body)
+	rec := httptest.NewRecorder()
+
+	srv.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var got map[string]interface{}
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	data, ok := got["providerSpecificData"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected providerSpecificData in response: %#v", got)
+	}
+	if data["baseUrl"] != "https://api.moonshot.ai/v1" {
+		t.Fatalf("unexpected baseUrl: %#v", data["baseUrl"])
+	}
+	if data["apiType"] != "openai" {
+		t.Fatalf("unexpected apiType: %#v", data["apiType"])
+	}
+}
+
 func TestModelsIncludeWave1Fallbacks(t *testing.T) {
 	srv := newTestServer(t)
 	req := httptest.NewRequest(http.MethodGet, "/api/models", nil)
@@ -97,13 +124,31 @@ func TestModelsIncludeWave1Fallbacks(t *testing.T) {
 		t.Fatalf("decode response: %v", err)
 	}
 	wanted := map[string]bool{
-		"deepseek/deepseek-chat":                           false,
-		"groq/llama-3.1-70b-versatile":                     false,
-		"perplexity/sonar-pro":                             false,
-		"nvidia/deepseek-ai/deepseek-v4-flash":             false,
-		"huggingface/deepseek-ai/DeepSeek-V3-0324:fastest": false,
-		"minimax/MiniMax-M2.7":                             false,
-		"glm/glm-4.7":                                      false,
+		"deepseek/deepseek-chat":                            false,
+		"groq/llama-3.1-70b-versatile":                      false,
+		"perplexity/sonar-pro":                              false,
+		"nvidia/deepseek-ai/deepseek-v4-flash":              false,
+		"huggingface/deepseek-ai/DeepSeek-V3-0324:fastest":  false,
+		"minimax/MiniMax-M2.7":                              false,
+		"glm/glm-4.7":                                       false,
+		"glm-cn/glm-4.7":                                    false,
+		"minimax-cn/MiniMax-Text-01":                        false,
+		"moonshot/moonshot-v1-8k":                           false,
+		"hyperbolic/meta-llama/Meta-Llama-3.1-70B-Instruct": false,
+		"novita/deepseek/deepseek-v3":                       false,
+		"sambanova/Meta-Llama-3.1-70B-Instruct":             false,
+		"chutes/deepseek-ai/DeepSeek-V3-0324":               false,
+		"lambda-ai/hermes-3-llama-3.1-405b-fp8":             false,
+		"featherless-ai/Qwen/Qwen2.5-Coder-32B-Instruct":    false,
+		"kluster/meta-llama/Meta-Llama-3.1-70B-Instruct":    false,
+		"reka/reka-core":                                    false,
+		"zai/glm-4.7":                                       false,
+		"qwen/qwen-plus":                                    false,
+		"opencode/gpt-4o-mini":                              false,
+		"opencode-go/gpt-4o-mini":                           false,
+		"opencode-zen/gpt-4o-mini":                          false,
+		"kiro/kiro-pro":                                     false,
+		"grok/grok-2-latest":                                false,
 	}
 	for _, model := range got.Models {
 		if _, ok := wanted[model["fullModel"]]; ok {
@@ -181,6 +226,57 @@ func TestWave2ChatCompletionsProxySuccess(t *testing.T) {
 				}
 				writeJSON(w, http.StatusOK, map[string]interface{}{
 					"id":      "chatcmpl-wave2",
+					"choices": []map[string]interface{}{{"message": map[string]string{"role": "assistant", "content": "ok"}}},
+				})
+			}))
+			defer upstream.Close()
+			_, err := srv.store.CreateProviderConnection(store.ProviderConnection{
+				Provider: tt.provider, Name: tt.provider + " smoke", AuthType: "apikey", APIKey: "x", IsActive: true,
+				ProviderSpecificData: map[string]interface{}{"baseUrl": upstream.URL, "apiType": "openai"},
+			})
+			if err != nil {
+				t.Fatalf("create connection: %v", err)
+			}
+			req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", bytes.NewBufferString(`{"model":"`+tt.model+`","messages":[{"role":"user","content":"hello"}]}`))
+			req.Header.Set("Content-Type", "application/json")
+			rec := httptest.NewRecorder()
+			srv.ServeHTTP(rec, req)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
+			}
+		})
+	}
+}
+
+func TestWave3ChatCompletionsProxySuccess(t *testing.T) {
+	tests := []struct {
+		provider string
+		model    string
+		upstream string
+	}{
+		{provider: "glm-cn", model: "glm-cn/glm-4.7", upstream: "glm-4.7"},
+		{provider: "moonshot", model: "moonshot/moonshot-v1-8k", upstream: "moonshot-v1-8k"},
+		{provider: "hyperbolic", model: "hyperbolic/meta-llama/Meta-Llama-3.1-70B-Instruct", upstream: "meta-llama/Meta-Llama-3.1-70B-Instruct"},
+		{provider: "opencode", model: "opencode/gpt-4o-mini", upstream: "gpt-4o-mini"},
+		{provider: "qwen", model: "qwen/qwen-plus", upstream: "qwen-plus"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.provider, func(t *testing.T) {
+			srv := newTestServer(t)
+			_, _ = srv.store.UpdateSettings(map[string]interface{}{"requireApiKey": false})
+			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != "/v1/chat/completions" && r.URL.Path != "/chat/completions" {
+					t.Fatalf("unexpected upstream path: %s", r.URL.Path)
+				}
+				var body map[string]interface{}
+				if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+					t.Fatalf("decode body: %v", err)
+				}
+				if body["model"] != tt.upstream {
+					t.Fatalf("unexpected model: %#v", body["model"])
+				}
+				writeJSON(w, http.StatusOK, map[string]interface{}{
+					"id":      "chatcmpl-wave3",
 					"choices": []map[string]interface{}{{"message": map[string]string{"role": "assistant", "content": "ok"}}},
 				})
 			}))

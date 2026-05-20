@@ -35,6 +35,7 @@ $env:XROUTER_ADDR=':1214'; go run ./cmd/xrouter
 - Generic adapters: `openai-compatible`, `anthropic-compatible`, `gemini-compatible`
 - Wave 1 OpenAI-compatible catalog: `deepseek`, `groq`, `mistral`, `cerebras`, `fireworks`, `together`, `siliconflow`, `vercel-ai-gateway`, `cohere`, `perplexity`
 - Wave 2 OpenAI-compatible catalog: `nvidia`, `huggingface`, `minimax`, `glm`
+- Wave 3 OpenAI-compatible catalog: `glm-cn`, `minimax-cn`, `moonshot`, `hyperbolic`, `novita`, `sambanova`, `chutes`, `lambda-ai`, `featherless-ai`, `kluster`, `reka`, `zai`, `qwen`, `opencode`, `opencode-go`, `opencode-zen`, `kiro`, `grok`
 - Media/search helpers: `voyage-ai`, `jina-ai`, `openai-tts`, `deepgram`, `brave-search`, `serper`, `tavily`, `exa`, `perplexity-search`
 
 ## Provider Quickstart

@@ -396,7 +396,7 @@ Legend:
 | `cartesia` | 9router, OmniRoute | apiKey, audio_only | NO | Need adapter/auth/base URL/model transform |
 | `cerebras` | 9router, OmniRoute | apiKey, apikey | NO | Need adapter/auth/base URL/model transform |
 | `chatgpt-web` | OmniRoute | web_cookie | NO | Need adapter/auth/base URL/model transform |
-| `chutes` | 9router, OmniRoute | apiKey, apikey | NO | Need adapter/auth/base URL/model transform |
+| `chutes` | 9router, OmniRoute | apiKey, apikey | YES | Added Wave 3 OpenAI-compatible catalog + fallback model |
 | `clarifai` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `claude` | 9router, CLIProxyAPI, OmniRoute | core/oauth/sdk, oauth | NO | Need adapter/auth/base URL/model transform |
 | `cline` | 9router, OmniRoute | oauth | NO | Need adapter/auth/base URL/model transform |
@@ -430,7 +430,7 @@ Legend:
 | `exa` | 9router | apiKey | NO | Need adapter/auth/base URL/model transform |
 | `exa-search` | OmniRoute | search | NO | Need adapter/auth/base URL/model transform |
 | `fal-ai` | 9router, OmniRoute | apiKey, apikey | NO | Need adapter/auth/base URL/model transform |
-| `featherless-ai` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
+| `featherless-ai` | OmniRoute | apikey | YES | Added Wave 3 OpenAI-compatible catalog + fallback model |
 | `fenayai` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `firecrawl` | 9router | apiKey | NO | Need adapter/auth/base URL/model transform |
 | `fireworks` | 9router, OmniRoute | apiKey, apikey | NO | Need adapter/auth/base URL/model transform |
@@ -450,19 +450,19 @@ Legend:
 | `gitlawb-gmi` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `glhf` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `glm` | 9router, OmniRoute | apiKey, apikey | NO | Need adapter/auth/base URL/model transform |
-| `glm-cn` | 9router, OmniRoute | apiKey, apikey | NO | Need adapter/auth/base URL/model transform |
+| `glm-cn` | 9router, OmniRoute | apiKey, apikey | YES | Added Wave 3 OpenAI-compatible catalog + fallback model |
 | `glmt` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `google-pse` | 9router | apiKey | NO | Need adapter/auth/base URL/model transform |
 | `google-pse-search` | OmniRoute | search | NO | Need adapter/auth/base URL/model transform |
 | `google-tts` | 9router | apiKey | NO | Need adapter/auth/base URL/model transform |
-| `grok` | CLIProxyAPI | core/oauth/sdk | NO | Need adapter/auth/base URL/model transform |
+| `grok` | CLIProxyAPI | core/oauth/sdk | YES | Added OAuth catalog alias to xAI flow + fallback model |
 | `grok-web` | 9router, OmniRoute | webCookie, web_cookie | NO | Need adapter/auth/base URL/model transform |
 | `groq` | 9router, OmniRoute | apiKey, apikey | NO | Need adapter/auth/base URL/model transform |
 | `hackclub` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `haiper` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `heroku` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `huggingface` | 9router, OmniRoute | apiKey, apikey | NO | Need adapter/auth/base URL/model transform |
-| `hyperbolic` | 9router, OmniRoute | apiKey, apikey | NO | Need adapter/auth/base URL/model transform |
+| `hyperbolic` | 9router, OmniRoute | apiKey, apikey | YES | Added Wave 3 OpenAI-compatible catalog + fallback model |
 | `ideogram` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `inference-net` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `inworld` | 9router, OmniRoute | apiKey, audio_only | NO | Need adapter/auth/base URL/model transform |
@@ -475,9 +475,9 @@ Legend:
 | `kimi` | 9router, CLIProxyAPI, OmniRoute | apiKey, apikey, core/oauth/sdk | NO | Need adapter/auth/base URL/model transform |
 | `kimi-coding` | OmniRoute | oauth | NO | Need adapter/auth/base URL/model transform |
 | `kimi-coding-apikey` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
-| `kiro` | 9router, OmniRoute | free | NO | Need adapter/auth/base URL/model transform |
-| `kluster` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
-| `lambda-ai` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
+| `kiro` | 9router, OmniRoute | free | YES | Added Wave 3 OpenAI-compatible catalog + fallback model |
+| `kluster` | OmniRoute | apikey | YES | Added Wave 3 OpenAI-compatible catalog + fallback model |
+| `lambda-ai` | OmniRoute | apikey | YES | Added Wave 3 OpenAI-compatible catalog + fallback model |
 | `laozhang` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `lemonade` | OmniRoute | local | NO | Need adapter/auth/base URL/model transform |
 | `leonardo` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
@@ -494,10 +494,10 @@ Legend:
 | `maritalk` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `meta-llama` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `minimax` | 9router, OmniRoute | apiKey, apikey | NO | Need adapter/auth/base URL/model transform |
-| `minimax-cn` | 9router, OmniRoute | apiKey, apikey | NO | Need adapter/auth/base URL/model transform |
+| `minimax-cn` | 9router, OmniRoute | apiKey, apikey | YES | Added Wave 3 OpenAI-compatible catalog + fallback model |
 | `mistral` | 9router, OmniRoute | apiKey, apikey | NO | Need adapter/auth/base URL/model transform |
 | `modal` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
-| `moonshot` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
+| `moonshot` | OmniRoute | apikey | YES | Added Wave 3 OpenAI-compatible catalog + fallback model |
 | `morph` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `muse-spark-web` | OmniRoute | web_cookie | NO | Need adapter/auth/base URL/model transform |
 | `nanobanana` | 9router, OmniRoute | apiKey, apikey | NO | Need adapter/auth/base URL/model transform |
@@ -505,7 +505,7 @@ Legend:
 | `nebius` | 9router, OmniRoute | apiKey, apikey | NO | Need adapter/auth/base URL/model transform |
 | `nlpcloud` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `nous-research` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
-| `novita` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
+| `novita` | OmniRoute | apikey | YES | Added Wave 3 OpenAI-compatible catalog + fallback model |
 | `nscale` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `nvidia` | 9router, OmniRoute | apikey, freeTier | NO | Need adapter/auth/base URL/model transform |
 | `oauth` | OmniRoute | cloud_agent | NO | Need adapter/auth/base URL/model transform |
@@ -517,9 +517,9 @@ Legend:
 | `oobabooga` | OmniRoute | local | NO | Need adapter/auth/base URL/model transform |
 | `openai` | 9router, CLIProxyAPI, OmniRoute | apiKey, apikey, core/oauth/sdk | YES | Built-in/generic route |
 | `openai-compatible` | CLIProxyAPI | core/oauth/sdk | YES | Built-in/generic route |
-| `opencode` | 9router, OmniRoute | free | NO | Need adapter/auth/base URL/model transform |
-| `opencode-go` | 9router, OmniRoute | apiKey, apikey | NO | Need adapter/auth/base URL/model transform |
-| `opencode-zen` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
+| `opencode` | 9router, OmniRoute | free | YES | Added Wave 3 OpenAI-compatible catalog + fallback model |
+| `opencode-go` | 9router, OmniRoute | apiKey, apikey | YES | Added Wave 3 OpenAI-compatible catalog + fallback model |
+| `opencode-zen` | OmniRoute | apikey | YES | Added Wave 3 OpenAI-compatible catalog + fallback model |
 | `openrouter` | 9router, OmniRoute | apikey, freeTier | YES | Built-in/generic route |
 | `ovhcloud` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `perplexity` | 9router, OmniRoute | apiKey, apikey | NO | Need adapter/auth/base URL/model transform |
@@ -535,12 +535,12 @@ Legend:
 | `puter` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `qianfan` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `qoder` | OmniRoute | free | NO | Need adapter/auth/base URL/model transform |
-| `qwen` | OmniRoute | free | NO | Need adapter/auth/base URL/model transform |
+| `qwen` | OmniRoute | free | YES | Added Wave 3 OpenAI-compatible catalog + fallback model |
 | `recraft` | 9router, OmniRoute | apiKey, apikey | NO | Need adapter/auth/base URL/model transform |
-| `reka` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
+| `reka` | OmniRoute | apikey | YES | Added Wave 3 OpenAI-compatible catalog + fallback model |
 | `replicate` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `runwayml` | 9router, OmniRoute | apiKey, apikey | NO | Need adapter/auth/base URL/model transform |
-| `sambanova` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
+| `sambanova` | OmniRoute | apikey | YES | Added Wave 3 OpenAI-compatible catalog + fallback model |
 | `sap` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `scaleway` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `sdwebui` | 9router, OmniRoute | apiKey, local | NO | Need adapter/auth/base URL/model transform |
@@ -586,7 +586,7 @@ Legend:
 | `xinference` | OmniRoute | local | NO | Need adapter/auth/base URL/model transform |
 | `youcom` | 9router | apiKey | NO | Need adapter/auth/base URL/model transform |
 | `youcom-search` | OmniRoute | search | NO | Need adapter/auth/base URL/model transform |
-| `zai` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
+| `zai` | OmniRoute | apikey | YES | Added Wave 3 OpenAI-compatible catalog + fallback model |
 | `zed` | OmniRoute | oauth | NO | Need adapter/auth/base URL/model transform |
 ## Notes on interpretation
 
