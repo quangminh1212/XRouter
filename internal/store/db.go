@@ -75,6 +75,7 @@ var providerCatalog = map[string]ProviderCatalogEntry{
 	"openai-tts":           {Provider: "openai-tts", AuthType: "apikey", APIType: "tts", BaseURL: "https://api.openai.com/v1"},
 	"elevenlabs":           {Provider: "elevenlabs", AuthType: "apikey", APIType: "tts", BaseURL: "https://api.elevenlabs.io/v1/text-to-speech", FallbackModels: []string{"elevenlabs/eleven_multilingual_v2"}},
 	"cartesia":             {Provider: "cartesia", AuthType: "apikey", APIType: "tts", BaseURL: "https://api.cartesia.ai/tts/bytes", FallbackModels: []string{"cartesia/sonic-2"}},
+	"assemblyai":           {Provider: "assemblyai", AuthType: "apikey", APIType: "stt", BaseURL: "https://api.assemblyai.com/v2/transcript", FallbackModels: []string{"assemblyai/universal-3-pro"}},
 	"deepgram":             {Provider: "deepgram", AuthType: "apikey", APIType: "stt", BaseURL: "https://api.deepgram.com/v1"},
 	"brave-search":         {Provider: "brave-search", AuthType: "apikey", APIType: "search", BaseURL: "https://api.search.brave.com/res/v1"},
 	"serper":               {Provider: "serper", AuthType: "apikey", APIType: "search", BaseURL: "https://google.serper.dev"},

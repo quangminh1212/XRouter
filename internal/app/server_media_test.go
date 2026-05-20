@@ -3,6 +3,7 @@ package app
 import (
 	"bytes"
 	"encoding/json"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -121,5 +122,51 @@ func TestAudioTranscriptionsProxySuccess(t *testing.T) {
 	srv.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestAssemblyAITranscriptionsProxySuccess(t *testing.T) {
+	srv := newTestServer(t)
+	_, _ = srv.store.UpdateSettings(map[string]interface{}{"requireApiKey": false})
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v2/upload":
+			writeJSON(w, http.StatusOK, map[string]string{"upload_url": "https://upload.example/audio.wav"})
+		case "/v2/transcript":
+			writeJSON(w, http.StatusOK, map[string]string{"id": "tr-123"})
+		case "/v2/transcript/tr-123":
+			writeJSON(w, http.StatusOK, map[string]string{"status": "completed", "text": "hello world"})
+		default:
+			t.Fatalf("unexpected upstream path: %s", r.URL.Path)
+		}
+	}))
+	defer upstream.Close()
+	_, _ = srv.store.CreateProviderConnection(store.ProviderConnection{
+		Provider: "assemblyai", Name: "assemblyai stt", AuthType: "apikey", APIKey: "x", IsActive: true,
+		ProviderSpecificData: map[string]interface{}{"baseUrl": upstream.URL + "/v2/transcript", "apiType": "stt"},
+	})
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	_ = writer.WriteField("model", "assemblyai/universal-3-pro")
+	part, err := writer.CreateFormFile("file", "audio.wav")
+	if err != nil {
+		t.Fatalf("create form file: %v", err)
+	}
+	_, _ = part.Write([]byte("audio-bytes"))
+	_ = writer.Close()
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/audio/transcriptions", &body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	var payload map[string]string
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if payload["text"] != "hello world" {
+		t.Fatalf("unexpected transcription payload: %#v", payload)
 	}
 }

@@ -12,7 +12,7 @@ Reference repos:
 - XRouter scope has expanded strongly and now includes OAuth/web-cookie onboarding, media/search endpoints, dashboard, MCP/A2A/tunnel, usage streams, and management APIs.
 - XRouter built-in provider catalog currently includes **65** providers (`internal/store/db.go`), with broad OpenAI-compatible/OAuth/web-cookie/search/audio coverage.
 - Full parity is still **not 100%** versus the 3 reference repos. Based on latest heads (`OmniRoute@39526b2`, `9router@9dde485`, `CLIProxyAPI@a726e37`), key provider/service gaps remain.
-- Current high-confidence provider gaps (vs OmniRoute + 9router provider assets): `assemblyai`, `aws-polly`.
+- Current high-confidence provider gaps (vs OmniRoute + 9router provider assets): `aws-polly`.
 
 ## Current XRouter Coverage
 
@@ -380,7 +380,7 @@ Legend:
 | `anthropic-compatible` | CLIProxyAPI | core/oauth/sdk | YES | Built-in/generic route |
 | `antigravity` | 9router, CLIProxyAPI, OmniRoute | core/oauth/sdk, oauth | NO | Need adapter/auth/base URL/model transform |
 | `apikey` | OmniRoute | cloud_agent | NO | Need adapter/auth/base URL/model transform |
-| `assemblyai` | 9router, OmniRoute | apiKey, audio_only | NO | Need adapter/auth/base URL/model transform |
+| `assemblyai` | 9router, OmniRoute | apiKey, audio_only | YES | Added STT upload/submit/poll adapter |
 | `auto` | OmniRoute | cloud_agent | NO | Need adapter/auth/base URL/model transform |
 | `aws-polly` | 9router, OmniRoute | apiKey, audio_only | NO | Need adapter/auth/base URL/model transform |
 | `azure` | 9router | apiKey | NO | Need adapter/auth/base URL/model transform |

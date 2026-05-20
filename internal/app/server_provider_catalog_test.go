@@ -160,6 +160,38 @@ func TestProviderCatalogIncludesTTSProviders(t *testing.T) {
 	}
 }
 
+func TestProviderCatalogIncludesSTTProviders(t *testing.T) {
+	srv := newTestServer(t)
+	req := httptest.NewRequest(http.MethodGet, "/api/providers/catalog?apiType=stt&authType=apikey", nil)
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	var payload struct {
+		Providers []store.ProviderCatalogEntry `json:"providers"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	expected := map[string]string{
+		"deepgram":   "https://api.deepgram.com/v1",
+		"assemblyai": "https://api.assemblyai.com/v2/transcript",
+	}
+	seen := map[string]string{}
+	for _, provider := range payload.Providers {
+		if provider.APIType != "stt" || provider.AuthType != "apikey" {
+			t.Fatalf("unexpected filtered provider: %#v", provider)
+		}
+		seen[provider.Provider] = provider.BaseURL
+	}
+	for name, baseURL := range expected {
+		if got := seen[name]; got != baseURL {
+			t.Fatalf("expected %s baseUrl %s, got %q", name, baseURL, got)
+		}
+	}
+}
+
 func TestProviderCatalogIncludesImageProviders(t *testing.T) {
 	srv := newTestServer(t)
 	req := httptest.NewRequest(http.MethodGet, "/api/providers/catalog?apiType=image&authType=apikey", nil)

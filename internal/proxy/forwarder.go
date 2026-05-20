@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime"
+	"mime/multipart"
 	"net/http"
 	"net/url"
 	"slices"
@@ -1497,6 +1499,9 @@ func supportsMediaAPI(provider, providerAPIType, requested string) bool {
 }
 
 func (f *Forwarder) forwardMediaWithConnection(ctx context.Context, c store.ProviderConnection, request MediaRequest, apiType string) (*http.Response, error) {
+	if apiType == "stt" && c.Provider == "assemblyai" {
+		return f.forwardAssemblyAITranscription(ctx, c, request)
+	}
 	endpoint, mode, err := resolveMediaEndpoint(c, request.Path, apiType)
 	if err != nil {
 		return nil, err
@@ -1550,6 +1555,167 @@ func (f *Forwarder) forwardMediaWithConnection(ctx context.Context, c store.Prov
 	}
 	resp.Header.Set("X-XRouter-Provider", c.Provider)
 	return resp, nil
+}
+
+func (f *Forwarder) forwardAssemblyAITranscription(ctx context.Context, c store.ProviderConnection, request MediaRequest) (*http.Response, error) {
+	model, fileName, fileBody, err := parseTranscriptionMultipart(request.Body, request.Headers.Get("Content-Type"))
+	if err != nil {
+		return nil, err
+	}
+	if model == "" {
+		model = "universal-3-pro"
+	}
+	if strings.Contains(model, "/") {
+		model = strings.TrimSpace(strings.SplitN(model, "/", 2)[1])
+	}
+
+	entry, _ := store.GetProviderCatalogEntry(c.Provider)
+	submitURL := resolveBaseURL(c, entry.BaseURL)
+	if c.ProviderSpecificData != nil {
+		if v := providerDataString(c, "baseUrl"); v != "" {
+			submitURL = resolveBaseURL(c, v)
+		}
+	}
+	uploadURL := providerDataString(c, "uploadUrl")
+	if uploadURL == "" {
+		uploadURL = strings.TrimSuffix(strings.TrimRight(submitURL, "/"), "/transcript") + "/upload"
+	}
+	uploadReq, err := http.NewRequestWithContext(ctx, http.MethodPost, uploadURL, bytes.NewReader(fileBody))
+	if err != nil {
+		return nil, err
+	}
+	uploadReq.Header.Set("Content-Type", "application/octet-stream")
+	uploadReq.Header.Set("Accept", "application/json")
+	setAuthHeader(uploadReq, c, "openai")
+	uploadResp, err := f.client.Do(uploadReq)
+	if err != nil {
+		return nil, err
+	}
+	defer uploadResp.Body.Close()
+	if uploadResp.StatusCode < 200 || uploadResp.StatusCode >= 300 {
+		raw, _ := io.ReadAll(io.LimitReader(uploadResp.Body, 1*1024*1024))
+		return cloneResponse(uploadResp.StatusCode, uploadResp.Header, raw), nil
+	}
+	var uploaded struct {
+		UploadURL string `json:"upload_url"`
+	}
+	if err := json.NewDecoder(io.LimitReader(uploadResp.Body, 1*1024*1024)).Decode(&uploaded); err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(uploaded.UploadURL) == "" {
+		return nil, fmt.Errorf("assemblyai upload missing upload_url")
+	}
+
+	submitURL = strings.TrimRight(submitURL, "/")
+	submitBody, _ := json.Marshal(map[string]interface{}{
+		"audio_url":          uploaded.UploadURL,
+		"speech_model":       model,
+		"language_detection": true,
+	})
+	submitReq, err := http.NewRequestWithContext(ctx, http.MethodPost, submitURL, bytes.NewReader(submitBody))
+	if err != nil {
+		return nil, err
+	}
+	submitReq.Header.Set("Content-Type", "application/json")
+	submitReq.Header.Set("Accept", "application/json")
+	submitReq.Header.Set("X-XRouter-Upload-Name", fileName)
+	setAuthHeader(submitReq, c, "openai")
+	submitResp, err := f.client.Do(submitReq)
+	if err != nil {
+		return nil, err
+	}
+	defer submitResp.Body.Close()
+	if submitResp.StatusCode < 200 || submitResp.StatusCode >= 300 {
+		raw, _ := io.ReadAll(io.LimitReader(submitResp.Body, 1*1024*1024))
+		return cloneResponse(submitResp.StatusCode, submitResp.Header, raw), nil
+	}
+	var submitted struct {
+		ID string `json:"id"`
+	}
+	if err := json.NewDecoder(io.LimitReader(submitResp.Body, 1*1024*1024)).Decode(&submitted); err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(submitted.ID) == "" {
+		return nil, fmt.Errorf("assemblyai submit missing transcript id")
+	}
+
+	pollURL := submitURL + "/" + url.PathEscape(strings.TrimSpace(submitted.ID))
+	deadline := time.Now().Add(12 * time.Second)
+	for time.Now().Before(deadline) {
+		pollReq, err := http.NewRequestWithContext(ctx, http.MethodGet, pollURL, nil)
+		if err != nil {
+			return nil, err
+		}
+		pollReq.Header.Set("Accept", "application/json")
+		setAuthHeader(pollReq, c, "openai")
+		pollResp, err := f.client.Do(pollReq)
+		if err != nil {
+			return nil, err
+		}
+		raw, _ := io.ReadAll(io.LimitReader(pollResp.Body, 1*1024*1024))
+		_ = pollResp.Body.Close()
+		if pollResp.StatusCode >= 200 && pollResp.StatusCode < 300 {
+			var polled map[string]interface{}
+			if err := json.Unmarshal(raw, &polled); err == nil {
+				status := payloadString(polled, "status")
+				if status == "completed" {
+					text, _ := polled["text"].(string)
+					payload, _ := json.Marshal(map[string]string{"text": text})
+					return cloneResponse(http.StatusOK, http.Header{"Content-Type": []string{"application/json"}}, payload), nil
+				}
+				if status == "error" {
+					message := payloadString(polled, "error")
+					if message == "" {
+						message = "assemblyai transcription failed"
+					}
+					payload, _ := json.Marshal(map[string]string{"error": message})
+					return cloneResponse(http.StatusBadGateway, http.Header{"Content-Type": []string{"application/json"}}, payload), nil
+				}
+			}
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	payload, _ := json.Marshal(map[string]string{"error": "assemblyai transcription timed out"})
+	return cloneResponse(http.StatusGatewayTimeout, http.Header{"Content-Type": []string{"application/json"}}, payload), nil
+}
+
+func parseTranscriptionMultipart(body []byte, contentType string) (string, string, []byte, error) {
+	_, params, err := mime.ParseMediaType(contentType)
+	if err != nil {
+		return "", "", nil, err
+	}
+	boundary := strings.TrimSpace(params["boundary"])
+	if boundary == "" {
+		return "", "", nil, fmt.Errorf("missing multipart boundary")
+	}
+	reader := multipart.NewReader(bytes.NewReader(body), boundary)
+	model := ""
+	fileName := ""
+	var fileBody []byte
+	for {
+		part, err := reader.NextPart()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return "", "", nil, err
+		}
+		name := strings.TrimSpace(part.FormName())
+		switch name {
+		case "model":
+			raw, _ := io.ReadAll(io.LimitReader(part, 1*1024*1024))
+			model = strings.TrimSpace(string(raw))
+		case "file":
+			fileName = part.FileName()
+			raw, _ := io.ReadAll(io.LimitReader(part, 32*1024*1024))
+			fileBody = raw
+		}
+		_ = part.Close()
+	}
+	if len(fileBody) == 0 {
+		return "", "", nil, fmt.Errorf("missing file")
+	}
+	return model, fileName, fileBody, nil
 }
 
 func transformMediaRequest(c store.ProviderConnection, apiType, endpoint string, body []byte, contentType string) (string, []byte, string, error) {
