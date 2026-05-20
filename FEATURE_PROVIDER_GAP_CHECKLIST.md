@@ -181,8 +181,6 @@ Reference repos:
 - [x] Add combo models and policy routing
   - [x] Combo model system
   - [x] Policy routing
-  - [x] Combo model system
-  - [x] Policy routing
 - [x] Add MCP support
 - [x] Add A2A support
 - [x] Add tunnel / remote access helpers
