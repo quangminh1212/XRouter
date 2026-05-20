@@ -121,7 +121,7 @@ Reference repos:
 - [x] Basic fallback routing
 - [x] Sticky/round-robin settings fields in DB
 - [ ] Rich routing strategies like those advertised by OmniRoute
-- [ ] Combo model system
+- [x] Combo model system
 - [ ] Multi-account weighted round-robin / quota-aware selection
 - [ ] Provider/account-level policy assignment
 - [ ] MCP endpoints/server integration
@@ -179,6 +179,8 @@ Reference repos:
 
 - [ ] Add web dashboard
 - [ ] Add combo models and policy routing
+  - [x] Combo model system
+  - [ ] Policy routing
 - [ ] Add MCP support
 - [ ] Add A2A support
 - [ ] Add tunnel / remote access helpers
