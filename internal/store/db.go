@@ -124,6 +124,16 @@ type RequestLog struct {
 	Error         string `json:"error,omitempty"`
 }
 
+type AuthFile struct {
+	ID         string `json:"id"`
+	Name       string `json:"name"`
+	Provider   string `json:"provider,omitempty"`
+	ContentB64 string `json:"contentB64,omitempty"`
+	Size       int    `json:"size,omitempty"`
+	CreatedAt  string `json:"createdAt,omitempty"`
+	UpdatedAt  string `json:"updatedAt,omitempty"`
+}
+
 type DailySummary struct {
 	Requests int64   `json:"requests"`
 	Cost     float64 `json:"cost"`
@@ -156,6 +166,7 @@ type DB struct {
 	Pricing             map[string]interface{} `json:"pricing"`
 	UsageData           UsageData              `json:"usageData"`
 	RequestLogs         []RequestLog           `json:"requestLogs"`
+	AuthFiles           []AuthFile             `json:"authFiles"`
 }
 
 type Store struct {
@@ -235,6 +246,9 @@ func (s *Store) load() error {
 	if db.RequestLogs == nil {
 		db.RequestLogs = []RequestLog{}
 	}
+	if db.AuthFiles == nil {
+		db.AuthFiles = []AuthFile{}
+	}
 	s.db = db
 	s.rawRoot = root
 	s.loadedAt = time.Now()
@@ -262,6 +276,7 @@ func defaultDB() DB {
 		Pricing:      map[string]interface{}{},
 		UsageData:    UsageData{History: []UsageEntry{}, TotalRequestsLifetime: 0, DailySummary: map[string]DailySummary{}},
 		RequestLogs:  []RequestLog{},
+		AuthFiles:    []AuthFile{},
 	}
 }
 
@@ -352,6 +367,9 @@ func (s *Store) persistLocked() error {
 		return err
 	}
 	if s.rawRoot["requestLogs"], err = mustJSON(s.db.RequestLogs); err != nil {
+		return err
+	}
+	if s.rawRoot["authFiles"], err = mustJSON(s.db.AuthFiles); err != nil {
 		return err
 	}
 	payload, err := json.MarshalIndent(s.rawRoot, "", "  ")
@@ -798,6 +816,64 @@ func (s *Store) RotateAPIKey(id string, newKey string) (APIKey, error) {
 		return s.db.APIKeys[i], nil
 	}
 	return APIKey{}, fmt.Errorf("api key not found")
+}
+
+func (s *Store) ListAuthFiles() []AuthFile {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]AuthFile, len(s.db.AuthFiles))
+	copy(out, s.db.AuthFiles)
+	for i := range out {
+		out[i].ContentB64 = ""
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		return out[i].CreatedAt > out[j].CreatedAt
+	})
+	return out
+}
+
+func (s *Store) CreateAuthFile(item AuthFile) (AuthFile, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := time.Now().UTC().Format(time.RFC3339)
+	item.ID = randID("af_")
+	item.Name = strings.TrimSpace(item.Name)
+	item.Provider = strings.TrimSpace(item.Provider)
+	item.CreatedAt = now
+	item.UpdatedAt = now
+	item.Size = len(item.ContentB64)
+	s.db.AuthFiles = append(s.db.AuthFiles, item)
+	return item, s.persistLocked()
+}
+
+func (s *Store) GetAuthFile(id string) (AuthFile, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, item := range s.db.AuthFiles {
+		if item.ID == id {
+			return item, true
+		}
+	}
+	return AuthFile{}, false
+}
+
+func (s *Store) DeleteAuthFile(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	next := s.db.AuthFiles[:0]
+	found := false
+	for _, item := range s.db.AuthFiles {
+		if item.ID == id {
+			found = true
+			continue
+		}
+		next = append(next, item)
+	}
+	if !found {
+		return fmt.Errorf("auth file not found")
+	}
+	s.db.AuthFiles = next
+	return s.persistLocked()
 }
 
 func (s *Store) GetModelAliases() map[string]string {
