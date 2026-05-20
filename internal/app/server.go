@@ -95,6 +95,8 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/management/model-availability", s.handleManagementModelAvailability)
 	s.mux.HandleFunc("/api/management/routing-strategy", s.handleManagementRoutingStrategy)
 	s.mux.HandleFunc("/api/management/retry-config", s.handleManagementRetryConfig)
+	s.mux.HandleFunc("/api/management/proxy-pools/", s.handleManagementProxyPoolByID)
+	s.mux.HandleFunc("/api/management/proxy-pools", s.handleManagementProxyPools)
 	s.mux.HandleFunc("/api/quota", s.handleQuota)
 	s.mux.HandleFunc("/api/usage/summary", s.handleQuota)
 	s.mux.HandleFunc("/api/usage/stats", s.handleUsageStats)
@@ -1505,6 +1507,76 @@ func (s *Server) handleManagementRetryConfig(w http.ResponseWriter, r *http.Requ
 			"maxRetries":         settings.MaxRetries,
 			"maxCooldownSeconds": settings.MaxCooldownSeconds,
 		})
+	default:
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+	}
+}
+
+func (s *Server) handleManagementProxyPools(w http.ResponseWriter, r *http.Request) {
+	if !isLocalOnlyRequest(r) {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "management api is restricted to localhost"})
+		return
+	}
+	switch r.Method {
+	case http.MethodGet:
+		writeJSON(w, http.StatusOK, map[string]interface{}{"pools": s.store.ListProxyPools()})
+	case http.MethodPost:
+		var body store.ProxyPool
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+			return
+		}
+		if strings.TrimSpace(body.Name) == "" {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "name is required"})
+			return
+		}
+		created, err := s.store.CreateProxyPool(body)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusCreated, created)
+	default:
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+	}
+}
+
+func (s *Server) handleManagementProxyPoolByID(w http.ResponseWriter, r *http.Request) {
+	if !isLocalOnlyRequest(r) {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "management api is restricted to localhost"})
+		return
+	}
+	id := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/management/proxy-pools/"), "/")
+	if id == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "missing proxy pool id"})
+		return
+	}
+	switch r.Method {
+	case http.MethodGet:
+		item, ok := s.store.GetProxyPool(id)
+		if !ok {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "proxy pool not found"})
+			return
+		}
+		writeJSON(w, http.StatusOK, item)
+	case http.MethodPatch:
+		var patch map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+			return
+		}
+		updated, err := s.store.UpdateProxyPool(id, patch)
+		if err != nil {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, updated)
+	case http.MethodDelete:
+		if err := s.store.DeleteProxyPool(id); err != nil {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]bool{"success": true})
 	default:
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
 	}

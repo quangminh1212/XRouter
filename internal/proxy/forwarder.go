@@ -199,6 +199,13 @@ func extractModel(body map[string]interface{}) string {
 	return ""
 }
 
+func extractPoolHint(body map[string]interface{}) string {
+	if v, ok := body["pool"].(string); ok {
+		return strings.TrimSpace(v)
+	}
+	return ""
+}
+
 func normalizeModelForUpstream(body map[string]interface{}, providerHint string) []byte {
 	if providerHint != "" {
 		if model, ok := body["model"].(string); ok && strings.HasPrefix(model, providerHint+"/") {
@@ -1137,6 +1144,8 @@ func (f *Forwarder) Forward(ctx context.Context, scope, path string, requestBody
 	}
 
 	model := extractModel(body)
+	poolHint := extractPoolHint(body)
+	delete(body, "pool")
 	if model != "" {
 		forcedMappings := f.store.GetForcedModelMappings()
 		if target, ok := forcedMappings[model]; ok && strings.TrimSpace(target) != "" {
@@ -1153,6 +1162,23 @@ func (f *Forwarder) Forward(ctx context.Context, scope, path string, requestBody
 	if len(candidates) == 0 && providerHint != "" {
 		candidates = f.store.GetActiveConnections("")
 	}
+	if strings.TrimSpace(poolHint) != "" {
+		if pool, ok := f.store.GetProxyPool(poolHint); ok {
+			allowed := map[string]bool{}
+			for _, id := range pool.ConnectionIDs {
+				allowed[id] = true
+			}
+			filtered := make([]store.ProviderConnection, 0, len(candidates))
+			for _, c := range candidates {
+				if allowed[c.ID] {
+					filtered = append(filtered, c)
+				}
+			}
+			candidates = filtered
+		} else {
+			return nil, fmt.Errorf("proxy pool not found")
+		}
+	}
 	if len(candidates) == 0 {
 		return nil, fmt.Errorf("no active provider connections")
 	}
@@ -1160,7 +1186,7 @@ func (f *Forwarder) Forward(ctx context.Context, scope, path string, requestBody
 	attempts := 0
 
 	upstreamBody := normalizeModelForUpstream(cloneRequestBody(body), providerHint)
-	if !isStreaming(body) && !anyConnectionHasModelControls(candidates) {
+	if !isStreaming(body) && strings.TrimSpace(poolHint) == "" && !anyConnectionHasModelControls(candidates) {
 		if resp, err, handled := f.forwardDedup(ctx, scope, path, upstreamBody, model, providerHint); handled {
 			return resp, err
 		}
