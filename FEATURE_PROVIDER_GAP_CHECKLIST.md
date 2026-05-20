@@ -127,7 +127,7 @@ Reference repos:
 - [x] MCP endpoints/server integration
 - [x] A2A protocol endpoints
 - [x] Tunnel/remote exposure features
-- [ ] CLI auto-config endpoints for external tools
+- [x] CLI auto-config endpoints for external tools
 - [ ] Dashboard/web UI
 - [ ] Real-time logs/analytics UI
 
