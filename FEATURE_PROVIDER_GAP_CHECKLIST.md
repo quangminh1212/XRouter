@@ -126,7 +126,7 @@ Reference repos:
 - [ ] Provider/account-level policy assignment
 - [x] MCP endpoints/server integration
 - [x] A2A protocol endpoints
-- [ ] Tunnel/remote exposure features
+- [x] Tunnel/remote exposure features
 - [ ] CLI auto-config endpoints for external tools
 - [ ] Dashboard/web UI
 - [ ] Real-time logs/analytics UI
@@ -185,7 +185,7 @@ Reference repos:
   - [ ] Policy routing
 - [x] Add MCP support
 - [x] Add A2A support
-- [ ] Add tunnel / remote access helpers
+- [x] Add tunnel / remote access helpers
 
 ## Top 30 Provider Implementation Priority
 
