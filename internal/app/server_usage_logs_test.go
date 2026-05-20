@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"xrouter/internal/store"
@@ -78,5 +79,40 @@ func TestUsageLogsEndpointRecordsProxyRequest(t *testing.T) {
 	}
 	if item.Model == "" || item.StatusCode != http.StatusOK || item.RequestBytes == 0 || item.ResponseBytes == 0 {
 		t.Fatalf("unexpected request log metrics: %#v", item)
+	}
+}
+
+func TestUsageStreamSnapshot(t *testing.T) {
+	srv := newTestServer(t)
+	if err := srv.store.RecordRequestLog(store.RequestLog{
+		ID:         "rlog_stream_1",
+		Path:       "/v1/chat/completions",
+		Provider:   "openai",
+		Model:      "openai/gpt-4o-mini",
+		StatusCode: http.StatusOK,
+	}); err != nil {
+		t.Fatalf("record request log: %v", err)
+	}
+	if err := srv.store.RecordUsage(store.UsageEntry{
+		Provider:         "openai",
+		Model:            "gpt-4o-mini",
+		PromptTokens:     10,
+		CompletionTokens: 5,
+	}); err != nil {
+		t.Fatalf("record usage: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/usage/stream?once=1&limit=1", nil)
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	if got := rec.Header().Get("Content-Type"); got != "text/event-stream" {
+		t.Fatalf("unexpected content type: %s", got)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "event: snapshot") || !strings.Contains(body, "rlog_stream_1") || !strings.Contains(body, "totalRequests") {
+		t.Fatalf("unexpected stream body: %s", body)
 	}
 }

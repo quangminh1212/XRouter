@@ -129,7 +129,7 @@ Reference repos:
 - [x] Tunnel/remote exposure features
 - [x] CLI auto-config endpoints for external tools
 - [ ] Dashboard/web UI
-- [ ] Real-time logs/analytics UI
+- [x] Real-time logs/analytics UI
 
 ## Reference Repo Coverage Snapshot
 

@@ -121,6 +121,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/quota", s.handleQuota)
 	s.mux.HandleFunc("/api/usage/summary", s.handleQuota)
 	s.mux.HandleFunc("/api/usage/stats", s.handleUsageStats)
+	s.mux.HandleFunc("/api/usage/stream", s.handleUsageStream)
 	s.mux.HandleFunc("/api/usage/logs/", s.handleUsageLogByID)
 	s.mux.HandleFunc("/api/usage/logs", s.handleUsageLogs)
 	s.mux.HandleFunc("/api/usage/history", s.handleUsageHistory)
@@ -2503,6 +2504,76 @@ func (s *Server) handleUsageLogs(w http.ResponseWriter, r *http.Request) {
 		"items": logs,
 		"count": len(logs),
 	})
+}
+
+func (s *Server) handleUsageStream(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "streaming unsupported"})
+		return
+	}
+	limit := 50
+	if raw := strings.TrimSpace(r.URL.Query().Get("limit")); raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
+			limit = parsed
+		}
+	}
+	lastHeadID := ""
+	send := func(event string, payload map[string]interface{}) bool {
+		raw, _ := json.Marshal(payload)
+		if _, err := fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event, raw); err != nil {
+			return false
+		}
+		flusher.Flush()
+		return true
+	}
+	initialLogs := s.store.GetRequestLogs(limit)
+	if len(initialLogs) > 0 {
+		lastHeadID = initialLogs[0].ID
+	}
+	if !send("snapshot", map[string]interface{}{
+		"stats": s.store.GetUsageStats(),
+		"logs":  initialLogs,
+	}) {
+		return
+	}
+	if r.URL.Query().Get("once") == "1" {
+		return
+	}
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case <-ticker.C:
+			currentLogs := s.store.GetRequestLogs(limit)
+			headID := ""
+			if len(currentLogs) > 0 {
+				headID = currentLogs[0].ID
+			}
+			if headID != "" && headID != lastHeadID {
+				lastHeadID = headID
+				if !send("update", map[string]interface{}{
+					"stats": s.store.GetUsageStats(),
+					"logs":  currentLogs,
+				}) {
+					return
+				}
+				continue
+			}
+			if !send("heartbeat", map[string]interface{}{"ts": time.Now().UTC().Format(time.RFC3339)}) {
+				return
+			}
+		}
+	}
 }
 
 func (s *Server) handleUsageLogByID(w http.ResponseWriter, r *http.Request) {
