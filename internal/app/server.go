@@ -131,6 +131,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/backend-api/codex/responses", s.handleProxy)
 	s.mux.HandleFunc("/v1/search", s.handleSearch)
 	s.mux.HandleFunc("/v1/embeddings", s.handleMediaProxy)
+	s.mux.HandleFunc("/v1/audio/voices", s.handleAudioVoices)
 	s.mux.HandleFunc("/v1/audio/speech", s.handleMediaProxy)
 	s.mux.HandleFunc("/v1/audio/transcriptions", s.handleMediaProxy)
 	s.mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -2510,6 +2511,26 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 		LatencyMs:  time.Since(start).Milliseconds(),
 	})
 	writeJSON(w, http.StatusOK, result)
+}
+
+func (s *Server) handleAudioVoices(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	voices := []map[string]string{
+		{"id": "alloy", "provider": "openai-tts", "language": "multilingual"},
+		{"id": "ash", "provider": "openai-tts", "language": "multilingual"},
+		{"id": "ballad", "provider": "openai-tts", "language": "multilingual"},
+		{"id": "coral", "provider": "openai-tts", "language": "multilingual"},
+		{"id": "echo", "provider": "openai-tts", "language": "multilingual"},
+		{"id": "fable", "provider": "openai-tts", "language": "multilingual"},
+		{"id": "nova", "provider": "openai-tts", "language": "multilingual"},
+		{"id": "onyx", "provider": "openai-tts", "language": "multilingual"},
+		{"id": "sage", "provider": "openai-tts", "language": "multilingual"},
+		{"id": "shimmer", "provider": "openai-tts", "language": "multilingual"},
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{"voices": voices})
 }
 
 func (s *Server) handleMediaProxy(w http.ResponseWriter, r *http.Request) {
