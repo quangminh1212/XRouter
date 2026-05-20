@@ -124,7 +124,7 @@ Reference repos:
 - [x] Combo model system
 - [ ] Multi-account weighted round-robin / quota-aware selection
 - [ ] Provider/account-level policy assignment
-- [ ] MCP endpoints/server integration
+- [x] MCP endpoints/server integration
 - [ ] A2A protocol endpoints
 - [ ] Tunnel/remote exposure features
 - [ ] CLI auto-config endpoints for external tools
@@ -183,7 +183,7 @@ Reference repos:
   - [x] Policy routing
   - [x] Combo model system
   - [ ] Policy routing
-- [ ] Add MCP support
+- [x] Add MCP support
 - [ ] Add A2A support
 - [ ] Add tunnel / remote access helpers
 
