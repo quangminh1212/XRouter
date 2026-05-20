@@ -213,6 +213,25 @@ func extractNodeHint(body map[string]interface{}) string {
 	return ""
 }
 
+func matchRoutePolicy(policy store.RoutePolicy, model string, providerHint string) bool {
+	if strings.TrimSpace(policy.ModelPrefix) != "" && !strings.HasPrefix(model, strings.TrimSpace(policy.ModelPrefix)) {
+		return false
+	}
+	if len(policy.Providers) > 0 {
+		matched := false
+		for _, provider := range policy.Providers {
+			if provider == strings.ToLower(strings.TrimSpace(providerHint)) {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			return false
+		}
+	}
+	return true
+}
+
 func normalizeModelForUpstream(body map[string]interface{}, providerHint string) []byte {
 	if providerHint != "" {
 		if model, ok := body["model"].(string); ok && strings.HasPrefix(model, providerHint+"/") {
@@ -1171,6 +1190,22 @@ func (f *Forwarder) Forward(ctx context.Context, scope, path string, requestBody
 	nodeHint := extractNodeHint(body)
 	delete(body, "pool")
 	delete(body, "node")
+	for _, policy := range f.store.ListRoutePolicies() {
+		if !matchRoutePolicy(policy, model, "") {
+			continue
+		}
+		if poolHint == "" && strings.TrimSpace(policy.TargetPoolID) != "" {
+			poolHint = strings.TrimSpace(policy.TargetPoolID)
+		}
+		if nodeHint == "" && strings.TrimSpace(policy.TargetNodeID) != "" {
+			nodeHint = strings.TrimSpace(policy.TargetNodeID)
+		}
+		if forced := strings.TrimSpace(policy.ForceModel); forced != "" {
+			body["model"] = forced
+			model = forced
+		}
+		break
+	}
 	if model != "" {
 		forcedMappings := f.store.GetForcedModelMappings()
 		if target, ok := forcedMappings[model]; ok && strings.TrimSpace(target) != "" {

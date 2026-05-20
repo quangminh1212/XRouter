@@ -159,6 +159,18 @@ type ComboModel struct {
 	UpdatedAt string   `json:"updatedAt,omitempty"`
 }
 
+type RoutePolicy struct {
+	ID           string   `json:"id"`
+	Name         string   `json:"name"`
+	ModelPrefix  string   `json:"modelPrefix,omitempty"`
+	Providers    []string `json:"providers,omitempty"`
+	TargetPoolID string   `json:"targetPoolId,omitempty"`
+	TargetNodeID string   `json:"targetNodeId,omitempty"`
+	ForceModel   string   `json:"forceModel,omitempty"`
+	CreatedAt    string   `json:"createdAt,omitempty"`
+	UpdatedAt    string   `json:"updatedAt,omitempty"`
+}
+
 type DailySummary struct {
 	Requests int64   `json:"requests"`
 	Cost     float64 `json:"cost"`
@@ -195,6 +207,7 @@ type DB struct {
 	ProxyPools          []ProxyPool            `json:"proxyPools"`
 	ProviderNodes       []ProviderNode         `json:"providerNodes"`
 	ComboModels         []ComboModel           `json:"comboModels"`
+	RoutePolicies       []RoutePolicy          `json:"routePolicies"`
 }
 
 type Store struct {
@@ -286,6 +299,9 @@ func (s *Store) load() error {
 	if db.ComboModels == nil {
 		db.ComboModels = []ComboModel{}
 	}
+	if db.RoutePolicies == nil {
+		db.RoutePolicies = []RoutePolicy{}
+	}
 	s.db = db
 	s.rawRoot = root
 	s.loadedAt = time.Now()
@@ -317,6 +333,7 @@ func defaultDB() DB {
 		ProxyPools:    []ProxyPool{},
 		ProviderNodes: []ProviderNode{},
 		ComboModels:   []ComboModel{},
+		RoutePolicies: []RoutePolicy{},
 	}
 }
 
@@ -419,6 +436,9 @@ func (s *Store) persistLocked() error {
 		return err
 	}
 	if s.rawRoot["comboModels"], err = mustJSON(s.db.ComboModels); err != nil {
+		return err
+	}
+	if s.rawRoot["routePolicies"], err = mustJSON(s.db.RoutePolicies); err != nil {
 		return err
 	}
 	payload, err := json.MarshalIndent(s.rawRoot, "", "  ")
@@ -1196,6 +1216,94 @@ func (s *Store) DeleteComboModel(alias string) error {
 		return fmt.Errorf("combo model not found")
 	}
 	s.db.ComboModels = next
+	return s.persistLocked()
+}
+
+func sanitizePolicyProviders(items []string) []string {
+	out := make([]string, 0, len(items))
+	for _, item := range sanitizeConnectionIDs(items) {
+		out = append(out, strings.ToLower(strings.TrimSpace(item)))
+	}
+	return out
+}
+
+func (s *Store) ListRoutePolicies() []RoutePolicy {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]RoutePolicy, len(s.db.RoutePolicies))
+	copy(out, s.db.RoutePolicies)
+	sort.SliceStable(out, func(i, j int) bool { return out[i].CreatedAt > out[j].CreatedAt })
+	return out
+}
+
+func (s *Store) CreateRoutePolicy(item RoutePolicy) (RoutePolicy, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := time.Now().UTC().Format(time.RFC3339)
+	item.ID = randID("rp_")
+	item.Name = strings.TrimSpace(item.Name)
+	item.ModelPrefix = strings.TrimSpace(item.ModelPrefix)
+	item.Providers = sanitizePolicyProviders(item.Providers)
+	item.TargetPoolID = strings.TrimSpace(item.TargetPoolID)
+	item.TargetNodeID = strings.TrimSpace(item.TargetNodeID)
+	item.ForceModel = strings.TrimSpace(item.ForceModel)
+	item.CreatedAt = now
+	item.UpdatedAt = now
+	s.db.RoutePolicies = append(s.db.RoutePolicies, item)
+	return item, s.persistLocked()
+}
+
+func (s *Store) UpdateRoutePolicy(id string, patch map[string]interface{}) (RoutePolicy, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	idx := -1
+	for i, item := range s.db.RoutePolicies {
+		if item.ID == id {
+			idx = i
+			break
+		}
+	}
+	if idx < 0 {
+		return RoutePolicy{}, fmt.Errorf("route policy not found")
+	}
+	raw, _ := json.Marshal(s.db.RoutePolicies[idx])
+	merged := map[string]interface{}{}
+	_ = json.Unmarshal(raw, &merged)
+	for k, v := range patch {
+		merged[k] = v
+	}
+	merged["updatedAt"] = time.Now().UTC().Format(time.RFC3339)
+	nextRaw, _ := json.Marshal(merged)
+	var next RoutePolicy
+	if err := json.Unmarshal(nextRaw, &next); err != nil {
+		return RoutePolicy{}, err
+	}
+	next.Name = strings.TrimSpace(next.Name)
+	next.ModelPrefix = strings.TrimSpace(next.ModelPrefix)
+	next.Providers = sanitizePolicyProviders(next.Providers)
+	next.TargetPoolID = strings.TrimSpace(next.TargetPoolID)
+	next.TargetNodeID = strings.TrimSpace(next.TargetNodeID)
+	next.ForceModel = strings.TrimSpace(next.ForceModel)
+	s.db.RoutePolicies[idx] = next
+	return next, s.persistLocked()
+}
+
+func (s *Store) DeleteRoutePolicy(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	next := s.db.RoutePolicies[:0]
+	found := false
+	for _, item := range s.db.RoutePolicies {
+		if item.ID == id {
+			found = true
+			continue
+		}
+		next = append(next, item)
+	}
+	if !found {
+		return fmt.Errorf("route policy not found")
+	}
+	s.db.RoutePolicies = next
 	return s.persistLocked()
 }
 
