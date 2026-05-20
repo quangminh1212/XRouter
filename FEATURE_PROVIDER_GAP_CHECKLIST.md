@@ -87,7 +87,7 @@ Reference repos:
 - [x] Provider credential validate endpoint
 - [x] Usage request logs
 - [x] Usage history endpoint
-- [ ] Usage chart/stats stream
+- [x] Usage chart/stats stream
 - [ ] Request detail endpoint
 - [ ] Model alias management
 - [ ] Disabled model management
