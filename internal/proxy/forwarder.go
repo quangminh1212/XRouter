@@ -123,25 +123,34 @@ func resolveEndpoint(c store.ProviderConnection, model, path string) (string, st
 		}
 	}
 	if baseURL == "" {
-		switch c.Provider {
-		case "openai":
-			baseURL = "https://api.openai.com"
-		case "anthropic":
-			baseURL = "https://api.anthropic.com"
-		case "openrouter":
-			baseURL = "https://openrouter.ai/api"
-		default:
+		if entry, ok := store.GetProviderCatalogEntry(c.Provider); ok {
+			baseURL = strings.TrimRight(entry.BaseURL, "/")
+			if apiType == "" {
+				apiType = entry.APIType
+			}
+		} else {
 			return "", "", fmt.Errorf("provider %s missing baseUrl", c.Provider)
 		}
 	}
 
 	if path == "/v1/responses" || apiType == "responses" {
-		return baseURL + "/responses", "openai", nil
+		return joinOpenAIEndpoint(baseURL, "/responses"), "openai", nil
+	}
+	if path == "/v1/completions" {
+		return joinOpenAIEndpoint(baseURL, "/v1/completions"), "openai", nil
 	}
 	if strings.Contains(model, "claude") || c.Provider == "anthropic" || strings.HasPrefix(c.Provider, "anthropic-compatible-") {
-		return baseURL + "/v1/messages", "anthropic", nil
+		return joinOpenAIEndpoint(baseURL, "/v1/messages"), "anthropic", nil
 	}
-	return baseURL + "/v1/chat/completions", "openai", nil
+	return joinOpenAIEndpoint(baseURL, "/v1/chat/completions"), "openai", nil
+}
+
+func joinOpenAIEndpoint(baseURL, path string) string {
+	base := strings.TrimRight(baseURL, "/")
+	if strings.HasPrefix(path, "/v1/") && strings.HasSuffix(base, "/v1") {
+		return base + strings.TrimPrefix(path, "/v1")
+	}
+	return base + path
 }
 
 func setAuthHeader(req *http.Request, c store.ProviderConnection, mode string) {
