@@ -1,4 +1,4 @@
-﻿# XRouter
+# XRouter
 
 XRouter is a lightweight Go router for OpenAI-compatible APIs. It reads the existing local `db.json` format used by XLab Router and exposes a small, low-memory HTTP API for health, settings, providers, models, usage summary, and upstream proxying.
 
@@ -27,6 +27,14 @@ $env:XROUTER_ADDR=':1214'; go run ./cmd/xrouter
 - `POST /v1/chat/completions`
 - `POST /v1/messages`
 - `POST /v1/responses`
+
+## Supported Provider Families
+
+- Built-in OpenAI/Anthropic/OAuth families: `openai`, `anthropic`, `openrouter`, `claude`, `codex`, `github`, `gemini`, `vertex`, `xai`, `antigravity`, `kimi`
+- Generic adapters: `openai-compatible`, `anthropic-compatible`, `gemini-compatible`
+- Wave 1 OpenAI-compatible catalog: `deepseek`, `groq`, `mistral`, `cerebras`, `fireworks`, `together`, `siliconflow`, `vercel-ai-gateway`, `cohere`, `perplexity`
+- Wave 2 OpenAI-compatible catalog: `nvidia`, `huggingface`, `minimax`, `glm`
+- Media/search helpers: `voyage-ai`, `jina-ai`, `openai-tts`, `deepgram`, `brave-search`, `serper`, `tavily`, `exa`, `perplexity-search`
 
 ## Provider Quickstart
 
@@ -80,6 +88,7 @@ go build -ldflags "-X xrouter/internal/version.Version=v0.1.0 -X xrouter/interna
 ## Release
 
 Push a tag matching `v*` to trigger `.github/workflows/release.yml`. The workflow builds static binaries for Linux amd64/arm64, Windows amd64 and macOS arm64, writes SHA256 files, and publishes them to a GitHub Release.
+
 ## Tests and CI
 
 Run the full suite locally:

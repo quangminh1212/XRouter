@@ -153,6 +153,56 @@ func TestWave1ChatCompletionsProxySuccess(t *testing.T) {
 	}
 }
 
+func TestWave2ChatCompletionsProxySuccess(t *testing.T) {
+	tests := []struct {
+		provider string
+		model    string
+		upstream string
+	}{
+		{provider: "nvidia", model: "nvidia/deepseek-ai/deepseek-v4-flash", upstream: "deepseek-ai/deepseek-v4-flash"},
+		{provider: "huggingface", model: "huggingface/deepseek-ai/DeepSeek-V3-0324:fastest", upstream: "deepseek-ai/DeepSeek-V3-0324:fastest"},
+		{provider: "minimax", model: "minimax/MiniMax-M2.7", upstream: "MiniMax-M2.7"},
+		{provider: "glm", model: "glm/glm-4.7", upstream: "glm-4.7"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.provider, func(t *testing.T) {
+			srv := newTestServer(t)
+			_, _ = srv.store.UpdateSettings(map[string]interface{}{"requireApiKey": false})
+			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != "/v1/chat/completions" && r.URL.Path != "/chat/completions" {
+					t.Fatalf("unexpected upstream path: %s", r.URL.Path)
+				}
+				var body map[string]interface{}
+				if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+					t.Fatalf("decode body: %v", err)
+				}
+				if body["model"] != tt.upstream {
+					t.Fatalf("unexpected model: %#v", body["model"])
+				}
+				writeJSON(w, http.StatusOK, map[string]interface{}{
+					"id":      "chatcmpl-wave2",
+					"choices": []map[string]interface{}{{"message": map[string]string{"role": "assistant", "content": "ok"}}},
+				})
+			}))
+			defer upstream.Close()
+			_, err := srv.store.CreateProviderConnection(store.ProviderConnection{
+				Provider: tt.provider, Name: tt.provider + " smoke", AuthType: "apikey", APIKey: "x", IsActive: true,
+				ProviderSpecificData: map[string]interface{}{"baseUrl": upstream.URL, "apiType": "openai"},
+			})
+			if err != nil {
+				t.Fatalf("create connection: %v", err)
+			}
+			req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", bytes.NewBufferString(`{"model":"`+tt.model+`","messages":[{"role":"user","content":"hello"}]}`))
+			req.Header.Set("Content-Type", "application/json")
+			rec := httptest.NewRecorder()
+			srv.ServeHTTP(rec, req)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
+			}
+		})
+	}
+}
+
 func TestChatCompletionsCooldownOn429(t *testing.T) {
 	srv := newTestServer(t)
 	_, _ = srv.store.UpdateSettings(map[string]interface{}{"requireApiKey": false})
