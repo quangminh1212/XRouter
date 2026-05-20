@@ -1,4 +1,18 @@
-/xlabrouter-go-test.exe
-/xlabrouter.exe
+# Build artifacts
+/xrouter
+/xrouter.exe
+/dist/
+/build/
 /.tmp-data/
+*.test
 *.test.exe
+
+# Local logs/temp
+.tmp_*.log
+*.log
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
