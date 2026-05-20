@@ -253,9 +253,9 @@ Target providers cho Wave 1:
 
 Success criteria:
 - [x] Tạo provider connection cho các provider trên qua `POST /api/providers` chạy được.
-- [ ] Proxy thành công qua `POST /v1/chat/completions` với model prefix `provider/model`.
+- [x] Proxy thành công qua `POST /v1/chat/completions` với model prefix `provider/model`.
 - [x] `GET /api/models` trả model hợp lệ (ít nhất gồm model map tĩnh fallback).
-- [ ] Cooldown/backoff hoạt động đúng khi provider trả `429/5xx`.
+- [x] Cooldown/backoff hoạt động đúng khi provider trả `429/5xx`.
 - [x] `go test ./...` pass, `go build ./cmd/xrouter` pass.
 
 ### A. File changes and exact responsibilities
@@ -340,10 +340,10 @@ Model fallback tối thiểu (để hiển thị và smoke):
 
 ### E. Done definition (strict)
 
-- [ ] Có thể thêm 10 provider Wave 1 không cần nhập baseUrl thủ công.
-- [ ] Proxy chat qua mỗi provider Wave 1 pass tối thiểu 1 request smoke.
-- [ ] Không regression các provider cũ: `openai`, `anthropic`, `openrouter`.
-- [ ] Toàn bộ test pass, build pass.
+- [x] Có thể thêm 10 provider Wave 1 không cần nhập baseUrl thủ công.
+- [x] Proxy chat qua mỗi provider Wave 1 pass tối thiểu 1 request smoke.
+- [x] Không regression các provider cũ: `openai`, `anthropic`, `openrouter`.
+- [x] Toàn bộ test pass, build pass.
 
 ## Provider Matrix
 
