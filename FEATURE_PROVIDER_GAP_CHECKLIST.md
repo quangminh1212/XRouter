@@ -52,7 +52,7 @@ Reference repos:
 - [x] OpenAI chat completions
 - [x] Anthropic messages
 - [x] OpenAI responses
-- [ ] OpenAI legacy completions
+- [x] OpenAI legacy completions
 - [x] Claude count tokens
 - [ ] Gemini-compatible `v1beta/models/*action`
 - [ ] Responses compact variant
@@ -155,7 +155,7 @@ Reference repos:
 ### P1 - should implement first
 
 - [ ] Add generic provider adapters for OpenAI-compatible, Anthropic-compatible, and Gemini-compatible upstreams
-- [ ] Add `POST /v1/completions`
+- [x] Add `POST /v1/completions`
 - [ ] Add `POST /v1/embeddings`
 - [ ] Add `POST /v1/images/generations`
 - [ ] Add `POST /v1/audio/speech`
