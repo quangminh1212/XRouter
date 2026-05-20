@@ -111,7 +111,7 @@ Reference repos:
 - [x] OAuth login flow for Gemini CLI
 - [x] OAuth login flow for Antigravity
 - [x] OAuth login flow for Kimi
-- [ ] OAuth login flow for xAI/Grok
+- [x] OAuth login flow for xAI/Grok
 - [ ] Browser-cookie/web-session onboarding
 - [x] Auto import from local IDE/CLI credentials
 - [x] Multi-account auth file management
