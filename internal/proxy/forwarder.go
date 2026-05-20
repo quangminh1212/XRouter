@@ -1151,6 +1151,22 @@ func (f *Forwarder) Forward(ctx context.Context, scope, path string, requestBody
 	}
 
 	model := extractModel(body)
+	if targets, ok := f.store.GetComboModelsMap()[model]; ok && len(targets) > 0 {
+		var lastErr error
+		for _, target := range targets {
+			nextBody := cloneRequestBody(body)
+			nextBody["model"] = target
+			raw, _ := json.Marshal(nextBody)
+			resp, err := f.Forward(ctx, scope, path, raw)
+			if err == nil {
+				return resp, nil
+			}
+			lastErr = err
+		}
+		if lastErr != nil {
+			return nil, lastErr
+		}
+	}
 	poolHint := extractPoolHint(body)
 	nodeHint := extractNodeHint(body)
 	delete(body, "pool")

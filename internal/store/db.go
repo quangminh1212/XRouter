@@ -152,6 +152,13 @@ type ProviderNode struct {
 	UpdatedAt     string   `json:"updatedAt,omitempty"`
 }
 
+type ComboModel struct {
+	Alias     string   `json:"alias"`
+	Targets   []string `json:"targets,omitempty"`
+	CreatedAt string   `json:"createdAt,omitempty"`
+	UpdatedAt string   `json:"updatedAt,omitempty"`
+}
+
 type DailySummary struct {
 	Requests int64   `json:"requests"`
 	Cost     float64 `json:"cost"`
@@ -187,6 +194,7 @@ type DB struct {
 	AuthFiles           []AuthFile             `json:"authFiles"`
 	ProxyPools          []ProxyPool            `json:"proxyPools"`
 	ProviderNodes       []ProviderNode         `json:"providerNodes"`
+	ComboModels         []ComboModel           `json:"comboModels"`
 }
 
 type Store struct {
@@ -275,6 +283,9 @@ func (s *Store) load() error {
 	if db.ProviderNodes == nil {
 		db.ProviderNodes = []ProviderNode{}
 	}
+	if db.ComboModels == nil {
+		db.ComboModels = []ComboModel{}
+	}
 	s.db = db
 	s.rawRoot = root
 	s.loadedAt = time.Now()
@@ -305,6 +316,7 @@ func defaultDB() DB {
 		AuthFiles:     []AuthFile{},
 		ProxyPools:    []ProxyPool{},
 		ProviderNodes: []ProviderNode{},
+		ComboModels:   []ComboModel{},
 	}
 }
 
@@ -404,6 +416,9 @@ func (s *Store) persistLocked() error {
 		return err
 	}
 	if s.rawRoot["providerNodes"], err = mustJSON(s.db.ProviderNodes); err != nil {
+		return err
+	}
+	if s.rawRoot["comboModels"], err = mustJSON(s.db.ComboModels); err != nil {
 		return err
 	}
 	payload, err := json.MarshalIndent(s.rawRoot, "", "  ")
@@ -1090,6 +1105,97 @@ func (s *Store) DeleteProviderNode(id string) error {
 		return fmt.Errorf("provider node not found")
 	}
 	s.db.ProviderNodes = next
+	return s.persistLocked()
+}
+
+func sanitizeComboTargets(items []string) []string {
+	out := make([]string, 0, len(items))
+	for _, item := range sanitizeConnectionIDs(items) {
+		if strings.Contains(item, "/") {
+			out = append(out, item)
+		}
+	}
+	return out
+}
+
+func (s *Store) ListComboModels() []ComboModel {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]ComboModel, len(s.db.ComboModels))
+	copy(out, s.db.ComboModels)
+	sort.SliceStable(out, func(i, j int) bool { return out[i].CreatedAt > out[j].CreatedAt })
+	return out
+}
+
+func (s *Store) GetComboModelsMap() map[string][]string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make(map[string][]string, len(s.db.ComboModels))
+	for _, item := range s.db.ComboModels {
+		out[item.Alias] = append([]string(nil), item.Targets...)
+	}
+	return out
+}
+
+func (s *Store) CreateComboModel(item ComboModel) (ComboModel, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := time.Now().UTC().Format(time.RFC3339)
+	item.Alias = strings.TrimSpace(item.Alias)
+	item.Targets = sanitizeComboTargets(item.Targets)
+	item.CreatedAt = now
+	item.UpdatedAt = now
+	s.db.ComboModels = append(s.db.ComboModels, item)
+	return item, s.persistLocked()
+}
+
+func (s *Store) UpdateComboModel(alias string, patch map[string]interface{}) (ComboModel, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	idx := -1
+	for i, item := range s.db.ComboModels {
+		if item.Alias == alias {
+			idx = i
+			break
+		}
+	}
+	if idx < 0 {
+		return ComboModel{}, fmt.Errorf("combo model not found")
+	}
+	raw, _ := json.Marshal(s.db.ComboModels[idx])
+	merged := map[string]interface{}{}
+	_ = json.Unmarshal(raw, &merged)
+	for k, v := range patch {
+		merged[k] = v
+	}
+	merged["updatedAt"] = time.Now().UTC().Format(time.RFC3339)
+	nextRaw, _ := json.Marshal(merged)
+	var next ComboModel
+	if err := json.Unmarshal(nextRaw, &next); err != nil {
+		return ComboModel{}, err
+	}
+	next.Alias = strings.TrimSpace(next.Alias)
+	next.Targets = sanitizeComboTargets(next.Targets)
+	s.db.ComboModels[idx] = next
+	return next, s.persistLocked()
+}
+
+func (s *Store) DeleteComboModel(alias string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	next := s.db.ComboModels[:0]
+	found := false
+	for _, item := range s.db.ComboModels {
+		if item.Alias == alias {
+			found = true
+			continue
+		}
+		next = append(next, item)
+	}
+	if !found {
+		return fmt.Errorf("combo model not found")
+	}
+	s.db.ComboModels = next
 	return s.persistLocked()
 }
 

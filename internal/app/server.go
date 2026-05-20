@@ -99,6 +99,8 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/management/proxy-pools", s.handleManagementProxyPools)
 	s.mux.HandleFunc("/api/management/provider-nodes/", s.handleManagementProviderNodeByID)
 	s.mux.HandleFunc("/api/management/provider-nodes", s.handleManagementProviderNodes)
+	s.mux.HandleFunc("/api/management/combo-models/", s.handleManagementComboModelByAlias)
+	s.mux.HandleFunc("/api/management/combo-models", s.handleManagementComboModels)
 	s.mux.HandleFunc("/api/quota", s.handleQuota)
 	s.mux.HandleFunc("/api/usage/summary", s.handleQuota)
 	s.mux.HandleFunc("/api/usage/stats", s.handleUsageStats)
@@ -1116,6 +1118,17 @@ func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
 			modelMap[fullModel] = map[string]string{"fullModel": fullModel, "alias": model["alias"], "availability": availabilityOrDefault(availability[fullModel])}
 		}
 	}
+	for _, combo := range s.store.ListComboModels() {
+		if strings.TrimSpace(combo.Alias) == "" {
+			continue
+		}
+		modelMap[combo.Alias] = map[string]string{
+			"fullModel":    combo.Alias,
+			"alias":        combo.Alias,
+			"availability": "combo",
+			"comboTargets": strings.Join(combo.Targets, ","),
+		}
+	}
 	models := make([]map[string]string, 0, len(modelMap))
 	for _, model := range modelMap {
 		models = append(models, model)
@@ -1645,6 +1658,69 @@ func (s *Server) handleManagementProviderNodeByID(w http.ResponseWriter, r *http
 		writeJSON(w, http.StatusOK, updated)
 	case http.MethodDelete:
 		if err := s.store.DeleteProviderNode(id); err != nil {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]bool{"success": true})
+	default:
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+	}
+}
+
+func (s *Server) handleManagementComboModels(w http.ResponseWriter, r *http.Request) {
+	if !isLocalOnlyRequest(r) {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "management api is restricted to localhost"})
+		return
+	}
+	switch r.Method {
+	case http.MethodGet:
+		writeJSON(w, http.StatusOK, map[string]interface{}{"comboModels": s.store.ListComboModels()})
+	case http.MethodPost:
+		var body store.ComboModel
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+			return
+		}
+		if strings.TrimSpace(body.Alias) == "" || len(body.Targets) == 0 {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "alias and targets are required"})
+			return
+		}
+		created, err := s.store.CreateComboModel(body)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusCreated, created)
+	default:
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+	}
+}
+
+func (s *Server) handleManagementComboModelByAlias(w http.ResponseWriter, r *http.Request) {
+	if !isLocalOnlyRequest(r) {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "management api is restricted to localhost"})
+		return
+	}
+	alias := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/management/combo-models/"), "/")
+	if alias == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "missing combo model alias"})
+		return
+	}
+	switch r.Method {
+	case http.MethodPatch:
+		var patch map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+			return
+		}
+		updated, err := s.store.UpdateComboModel(alias, patch)
+		if err != nil {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, updated)
+	case http.MethodDelete:
+		if err := s.store.DeleteComboModel(alias); err != nil {
 			writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
 			return
 		}
