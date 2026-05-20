@@ -134,6 +134,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/v1/responses/stream", s.handleProxy)
 	s.mux.HandleFunc("/backend-api/codex/responses", s.handleProxy)
 	s.mux.HandleFunc("/v1/search", s.handleSearch)
+	s.mux.HandleFunc("/v1/web/search", s.handleSearch)
 	s.mux.HandleFunc("/v1/web/fetch", s.handleWebFetch)
 	s.mux.HandleFunc("/v1/embeddings", s.handleMediaProxy)
 	s.mux.HandleFunc("/v1/images/generations", s.handleMediaProxy)
