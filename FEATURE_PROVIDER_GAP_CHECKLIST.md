@@ -89,7 +89,7 @@ Reference repos:
 - [x] Usage history endpoint
 - [x] Usage chart/stats stream
 - [x] Request detail endpoint
-- [ ] Model alias management
+- [x] Model alias management
 - [ ] Disabled model management
 - [ ] Model availability checks
 - [ ] Routing strategy management
@@ -170,6 +170,9 @@ Reference repos:
 - [ ] Add OAuth provider flows: `claude`, `codex`, `github`, `gemini-cli`, `antigravity`, `xai`
 - [ ] Add account pool management and richer round-robin/fallback strategies
 - [ ] Add model alias / disabled / availability management
+  - [x] Model alias management
+  - [ ] Disabled model management
+  - [ ] Model availability management
 - [ ] Add CLI-compatible aliases and advanced response variants
 
 ### P3 - platform parity layer
