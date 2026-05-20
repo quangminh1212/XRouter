@@ -157,6 +157,9 @@ func resolveEndpoint(c store.ProviderConnection, model, path string) (string, st
 	if path == "/v1/completions" {
 		return joinOpenAIEndpoint(baseURL, "/v1/completions"), "openai", nil
 	}
+	if path == "/v1/messages/count_tokens" {
+		return joinOpenAIEndpoint(baseURL, "/v1/messages/count_tokens"), "anthropic", nil
+	}
 	if apiType == "anthropic" {
 		return joinOpenAIEndpoint(baseURL, "/v1/messages"), "anthropic", nil
 	}
