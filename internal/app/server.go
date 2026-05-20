@@ -83,6 +83,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/health", s.handleHealth)
 	s.mux.HandleFunc("/api/settings", s.handleSettings)
 	s.mux.HandleFunc("/api/providers", s.handleProviders)
+	s.mux.HandleFunc("/api/providers/cookie-import", s.handleProviderCookieImport)
 	s.mux.HandleFunc("/api/providers/", s.handleProviderByID)
 	s.mux.HandleFunc("/api/oauth/providers", s.handleOAuthProviders)
 	s.mux.HandleFunc("/api/oauth/providers/", s.handleOAuthProviderImport)
@@ -282,6 +283,65 @@ func (s *Server) handleProviders(w http.ResponseWriter, r *http.Request) {
 	default:
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
 	}
+}
+
+func (s *Server) handleProviderCookieImport(w http.ResponseWriter, r *http.Request) {
+	if !isLocalOnlyRequest(r) {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "cookie import is restricted to localhost"})
+		return
+	}
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	var body struct {
+		Provider     string                 `json:"provider"`
+		Name         string                 `json:"name"`
+		Cookie       string                 `json:"cookie"`
+		Session      string                 `json:"session"`
+		DefaultModel string                 `json:"defaultModel"`
+		AccountName  string                 `json:"accountName"`
+		AccountEmail string                 `json:"accountEmail"`
+		Data         map[string]interface{} `json:"providerSpecificData"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1*1024*1024)).Decode(&body); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return
+	}
+	provider := strings.TrimSpace(body.Provider)
+	if provider == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "provider is required"})
+		return
+	}
+	cookie := strings.TrimSpace(body.Cookie)
+	if cookie == "" {
+		cookie = strings.TrimSpace(body.Session)
+	}
+	if cookie == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "cookie or session is required"})
+		return
+	}
+	name := strings.TrimSpace(body.Name)
+	if name == "" {
+		name = provider + " browser session"
+	}
+	created, err := s.store.CreateProviderConnection(store.ProviderConnection{
+		Provider:             provider,
+		Name:                 name,
+		AuthType:             "cookie",
+		APIKey:               cookie,
+		IsActive:             true,
+		DefaultModel:         strings.TrimSpace(body.DefaultModel),
+		AccountName:          strings.TrimSpace(body.AccountName),
+		AccountEmail:         strings.TrimSpace(body.AccountEmail),
+		ProviderSpecificData: body.Data,
+	})
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	created.APIKey = ""
+	writeJSON(w, http.StatusCreated, created)
 }
 
 func (s *Server) handleProviderByID(w http.ResponseWriter, r *http.Request) {
