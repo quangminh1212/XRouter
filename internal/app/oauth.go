@@ -1,0 +1,610 @@
+package app
+
+import (
+	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+
+	"xrouter/internal/proxy"
+	"xrouter/internal/store"
+)
+
+func (s *Server) handleOAuthProviders(w http.ResponseWriter, r *http.Request) {
+	if !isLocalOnlyRequest(r) {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "oauth provider management is restricted to localhost"})
+		return
+	}
+	if r.Method != http.MethodGet {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	providers := make([]store.ProviderCatalogEntry, 0)
+	for _, entry := range store.ListProviderCatalogEntries() {
+		if entry.AuthType == "oauth" {
+			providers = append(providers, entry)
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{"providers": providers})
+}
+
+func maskSecretPreview(value string) string {
+	value = strings.TrimSpace(value)
+	if len(value) <= 8 {
+		return ""
+	}
+	return value[:4] + "..." + value[len(value)-4:]
+}
+
+func detectProviderFromCredentialPath(path string) string {
+	lower := strings.ToLower(filepath.ToSlash(path))
+	switch {
+	case strings.Contains(lower, "anthropic") || strings.Contains(lower, "claude"):
+		return "claude"
+	case strings.Contains(lower, "openai") || strings.Contains(lower, "codex"):
+		return "codex"
+	case strings.Contains(lower, "gemini") || strings.Contains(lower, "google"):
+		return "gemini"
+	case strings.Contains(lower, "kimi"):
+		return "kimi"
+	case strings.Contains(lower, "grok") || strings.Contains(lower, "xai"):
+		return "xai"
+	default:
+		return ""
+	}
+}
+
+func extractCredentialPreviews(content string) []string {
+	var out []string
+	var parsed interface{}
+	if err := json.Unmarshal([]byte(content), &parsed); err == nil {
+		var walk func(interface{})
+		walk = func(v interface{}) {
+			switch item := v.(type) {
+			case map[string]interface{}:
+				for key, value := range item {
+					lower := strings.ToLower(key)
+					if str, ok := value.(string); ok && (strings.Contains(lower, "token") || strings.Contains(lower, "key") || strings.Contains(lower, "secret")) {
+						if preview := maskSecretPreview(str); preview != "" {
+							out = append(out, preview)
+						}
+					}
+					walk(value)
+				}
+			case []interface{}:
+				for _, value := range item {
+					walk(value)
+				}
+			}
+		}
+		walk(parsed)
+		return out
+	}
+	for _, line := range strings.Split(content, "\n") {
+		lower := strings.ToLower(line)
+		if !strings.Contains(lower, "token") && !strings.Contains(lower, "key") && !strings.Contains(lower, "secret") {
+			continue
+		}
+		parts := strings.FieldsFunc(line, func(r rune) bool { return r == '=' || r == ':' || r == '"' || r == '\'' || r == ' ' || r == '\t' })
+		for _, part := range parts {
+			if preview := maskSecretPreview(part); preview != "" {
+				out = append(out, preview)
+			}
+		}
+	}
+	return out
+}
+
+func candidateCredentialFiles(home string) []string {
+	return []string{
+		filepath.Join(home, ".codex", "auth.json"),
+		filepath.Join(home, ".config", "codex", "auth.json"),
+		filepath.Join(home, ".claude", ".credentials.json"),
+		filepath.Join(home, ".config", "claude", "credentials.json"),
+		filepath.Join(home, ".gemini", "oauth_creds.json"),
+		filepath.Join(home, ".config", "gemini", "oauth_creds.json"),
+		filepath.Join(home, ".config", "gcloud", "application_default_credentials.json"),
+	}
+}
+
+func (s *Server) handleOAuthProviderScanLocal(w http.ResponseWriter, r *http.Request) {
+	if !isLocalOnlyRequest(r) {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "oauth provider management is restricted to localhost"})
+		return
+	}
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	home, err := os.UserHomeDir()
+	if err != nil || strings.TrimSpace(home) == "" {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to resolve home directory"})
+		return
+	}
+	var matches []map[string]interface{}
+	for _, path := range candidateCredentialFiles(home) {
+		info, err := os.Stat(path)
+		if err != nil || info.IsDir() || info.Size() > 512*1024 {
+			continue
+		}
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		provider := detectProviderFromCredentialPath(path)
+		matches = append(matches, map[string]interface{}{
+			"path":           path,
+			"provider":       provider,
+			"size":           info.Size(),
+			"secretPreviews": extractCredentialPreviews(string(raw)),
+		})
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{"matches": matches})
+}
+
+func (s *Server) handleOAuthProviderImport(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimSpace(r.URL.Path)
+	if strings.HasSuffix(path, "/start") {
+		s.handleOAuthProviderStart(w, r)
+		return
+	}
+	if strings.HasSuffix(path, "/exchange") {
+		s.handleOAuthProviderExchange(w, r)
+		return
+	}
+	if strings.HasSuffix(path, "/refresh") {
+		s.handleOAuthProviderRefresh(w, r)
+		return
+	}
+	if strings.HasSuffix(path, "/import-file") {
+		s.handleVertexCredentialImport(w, r)
+		return
+	}
+	if !isLocalOnlyRequest(r) {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "oauth provider management is restricted to localhost"})
+		return
+	}
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	suffix := strings.TrimPrefix(r.URL.Path, "/api/oauth/providers/")
+	provider := strings.TrimSuffix(strings.TrimSpace(suffix), "/import")
+	if !strings.HasSuffix(suffix, "/import") || provider == "" {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
+		return
+	}
+	entry, ok := store.GetProviderCatalogEntry(provider)
+	if !ok || entry.AuthType != "oauth" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "unknown oauth provider"})
+		return
+	}
+	var body struct {
+		Name                 string                 `json:"name"`
+		AccessToken          string                 `json:"accessToken"`
+		RefreshToken         string                 `json:"refreshToken"`
+		APIKey               string                 `json:"apiKey"`
+		DefaultModel         string                 `json:"defaultModel"`
+		ProviderSpecificData map[string]interface{} `json:"providerSpecificData"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return
+	}
+	if strings.TrimSpace(body.AccessToken) == "" && strings.TrimSpace(body.APIKey) == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "accessToken or apiKey is required"})
+		return
+	}
+	name := strings.TrimSpace(body.Name)
+	if name == "" {
+		name = entry.Provider + " oauth"
+	}
+	created, err := s.store.CreateProviderConnection(store.ProviderConnection{
+		Provider:             entry.Provider,
+		Name:                 name,
+		AuthType:             "oauth",
+		APIKey:               strings.TrimSpace(body.APIKey),
+		AccessToken:          strings.TrimSpace(body.AccessToken),
+		RefreshToken:         strings.TrimSpace(body.RefreshToken),
+		IsActive:             true,
+		DefaultModel:         strings.TrimSpace(body.DefaultModel),
+		ProviderSpecificData: body.ProviderSpecificData,
+	})
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	created.APIKey, created.AccessToken, created.RefreshToken = "", "", ""
+	writeJSON(w, http.StatusCreated, created)
+}
+
+func (s *Server) handleOAuthProviderRefresh(w http.ResponseWriter, r *http.Request) {
+	if !isLocalOnlyRequest(r) {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "oauth provider management is restricted to localhost"})
+		return
+	}
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	suffix := strings.TrimPrefix(r.URL.Path, "/api/oauth/providers/")
+	id := strings.TrimSuffix(strings.TrimSpace(suffix), "/refresh")
+	if !strings.HasSuffix(suffix, "/refresh") || id == "" {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
+		return
+	}
+	connection, ok := s.store.GetConnectionByIDRaw(id)
+	if !ok {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "provider connection not found"})
+		return
+	}
+	if connection.AuthType != "oauth" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "provider connection is not oauth"})
+		return
+	}
+	var body struct {
+		TokenURL     string `json:"tokenUrl"`
+		ClientID     string `json:"clientId"`
+		ClientSecret string `json:"clientSecret"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil && err != io.EOF {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return
+	}
+	result, err := s.forwarder.RefreshOAuthToken(r.Context(), connection, strings.TrimSpace(body.TokenURL), strings.TrimSpace(body.ClientID), strings.TrimSpace(body.ClientSecret))
+	if err != nil {
+		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+		return
+	}
+	updated, err := s.store.UpdateOAuthTokens(connection.ID, result.AccessToken, result.RefreshToken, result.TokenExpiry)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	updated.APIKey, updated.AccessToken, updated.RefreshToken = "", "", ""
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"success":     true,
+		"connection":  updated,
+		"tokenType":   result.TokenType,
+		"tokenExpiry": result.TokenExpiry,
+	})
+}
+
+func (s *Server) handleVertexCredentialImport(w http.ResponseWriter, r *http.Request) {
+	if !isLocalOnlyRequest(r) {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "oauth provider management is restricted to localhost"})
+		return
+	}
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	suffix := strings.TrimPrefix(r.URL.Path, "/api/oauth/providers/")
+	provider := strings.TrimSuffix(strings.TrimSpace(suffix), "/import-file")
+	if !strings.HasSuffix(suffix, "/import-file") || provider != "vertex" {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
+		return
+	}
+	var body struct {
+		Name         string `json:"name"`
+		AuthFileID   string `json:"authFileId"`
+		DefaultModel string `json:"defaultModel"`
+		ProjectID    string `json:"projectId"`
+		Location     string `json:"location"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return
+	}
+	authFile, ok := s.store.GetAuthFile(strings.TrimSpace(body.AuthFileID))
+	if !ok {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "auth file not found"})
+		return
+	}
+	decoded, err := base64.StdEncoding.DecodeString(authFile.ContentB64)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "auth file content is invalid"})
+		return
+	}
+	var creds map[string]interface{}
+	if err := json.Unmarshal(decoded, &creds); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "auth file must contain JSON credentials"})
+		return
+	}
+	projectID := strings.TrimSpace(body.ProjectID)
+	if projectID == "" {
+		if raw, ok := creds["project_id"].(string); ok {
+			projectID = strings.TrimSpace(raw)
+		}
+	}
+	location := strings.TrimSpace(body.Location)
+	if location == "" {
+		location = "us-central1"
+	}
+	if projectID == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "projectId is required"})
+		return
+	}
+	name := strings.TrimSpace(body.Name)
+	if name == "" {
+		name = "vertex oauth"
+	}
+	created, err := s.store.CreateProviderConnection(store.ProviderConnection{
+		Provider:     "vertex",
+		Name:         name,
+		AuthType:     "oauth",
+		IsActive:     true,
+		DefaultModel: strings.TrimSpace(body.DefaultModel),
+		ProviderSpecificData: map[string]interface{}{
+			"authFileId": strings.TrimSpace(body.AuthFileID),
+			"projectId":  projectID,
+			"location":   location,
+		},
+	})
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusCreated, created)
+}
+
+func randomHex(n int) string {
+	buf := make([]byte, n)
+	_, _ = rand.Read(buf)
+	return hex.EncodeToString(buf)
+}
+
+func pkceChallenge(verifier string) string {
+	sum := sha256.Sum256([]byte(verifier))
+	return base64.RawURLEncoding.EncodeToString(sum[:])
+}
+
+func (s *Server) handleOAuthProviderStart(w http.ResponseWriter, r *http.Request) {
+	if !isLocalOnlyRequest(r) {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "oauth provider management is restricted to localhost"})
+		return
+	}
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	provider, entry, ok := parseOAuthProviderPath(r.URL.Path, "/start")
+	if !ok {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "unknown oauth provider"})
+		return
+	}
+	var body struct {
+		RedirectURI  string   `json:"redirectUri"`
+		ClientID     string   `json:"clientId"`
+		ClientSecret string   `json:"clientSecret"`
+		AuthorizeURL string   `json:"authorizeUrl"`
+		TokenURL     string   `json:"tokenUrl"`
+		Scopes       []string `json:"scopes"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil && err != io.EOF {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return
+	}
+	redirectURI := strings.TrimSpace(body.RedirectURI)
+	if redirectURI == "" {
+		redirectURI = "http://localhost:1213/api/oauth/callback"
+	}
+	clientID := strings.TrimSpace(body.ClientID)
+	if clientID == "" {
+		clientID = strings.TrimSpace(entry.ClientID)
+	}
+	if clientID == "" {
+		envName := "XROUTER_" + strings.ToUpper(strings.ReplaceAll(provider, "-", "_")) + "_OAUTH_CLIENT_ID"
+		clientID = strings.TrimSpace(os.Getenv(envName))
+	}
+	authorizeURL := strings.TrimSpace(body.AuthorizeURL)
+	if authorizeURL == "" {
+		authorizeURL = strings.TrimSpace(entry.AuthorizeURL)
+	}
+	if authorizeURL == "" {
+		envName := "XROUTER_" + strings.ToUpper(strings.ReplaceAll(provider, "-", "_")) + "_OAUTH_AUTHORIZE_URL"
+		authorizeURL = strings.TrimSpace(os.Getenv(envName))
+	}
+	tokenURL := strings.TrimSpace(body.TokenURL)
+	if tokenURL == "" {
+		tokenURL = strings.TrimSpace(entry.TokenURL)
+	}
+	if tokenURL == "" {
+		envName := "XROUTER_" + strings.ToUpper(strings.ReplaceAll(provider, "-", "_")) + "_OAUTH_TOKEN_URL"
+		tokenURL = strings.TrimSpace(os.Getenv(envName))
+	}
+	scopes := body.Scopes
+	if len(scopes) == 0 {
+		scopes = entry.Scopes
+	}
+	if clientID == "" || authorizeURL == "" || tokenURL == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "clientId, authorizeUrl and tokenUrl are required"})
+		return
+	}
+	verifier := randomHex(32)
+	state := randomHex(16)
+	u, err := url.Parse(authorizeURL)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid authorizeUrl"})
+		return
+	}
+	q := u.Query()
+	q.Set("response_type", "code")
+	q.Set("client_id", clientID)
+	q.Set("redirect_uri", redirectURI)
+	q.Set("state", state)
+	q.Set("code_challenge", pkceChallenge(verifier))
+	q.Set("code_challenge_method", "S256")
+	if len(scopes) > 0 {
+		q.Set("scope", strings.Join(scopes, " "))
+	}
+	u.RawQuery = q.Encode()
+
+	s.oauthMu.Lock()
+	s.oauth[state] = oauthSession{
+		Provider:     provider,
+		State:        state,
+		CodeVerifier: verifier,
+		RedirectURI:  redirectURI,
+		ClientID:     clientID,
+		ClientSecret: strings.TrimSpace(body.ClientSecret),
+		TokenURL:     tokenURL,
+		CreatedAt:    time.Now(),
+	}
+	s.oauthMu.Unlock()
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"provider":         provider,
+		"state":            state,
+		"authorizationUrl": u.String(),
+		"redirectUri":      redirectURI,
+	})
+}
+
+func (s *Server) handleOAuthProviderExchange(w http.ResponseWriter, r *http.Request) {
+	if !isLocalOnlyRequest(r) {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "oauth provider management is restricted to localhost"})
+		return
+	}
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	provider, _, ok := parseOAuthProviderPath(r.URL.Path, "/exchange")
+	if !ok {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "unknown oauth provider"})
+		return
+	}
+	var body struct {
+		State string `json:"state"`
+		Code  string `json:"code"`
+		Name  string `json:"name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return
+	}
+	session, ok := s.popOAuthSession(strings.TrimSpace(body.State), provider)
+	if !ok {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "oauth session not found"})
+		return
+	}
+	result, err := s.exchangeOAuthCode(r.Context(), session, strings.TrimSpace(body.Code))
+	if err != nil {
+		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+		return
+	}
+	name := strings.TrimSpace(body.Name)
+	if name == "" {
+		name = provider + " oauth"
+	}
+	created, err := s.store.CreateProviderConnection(store.ProviderConnection{
+		Provider:     provider,
+		Name:         name,
+		AuthType:     "oauth",
+		AccessToken:  result.AccessToken,
+		RefreshToken: result.RefreshToken,
+		TokenExpiry:  result.TokenExpiry,
+		IsActive:     true,
+	})
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	created.APIKey, created.AccessToken, created.RefreshToken = "", "", ""
+	writeJSON(w, http.StatusCreated, map[string]interface{}{"success": true, "connection": created})
+}
+
+func (s *Server) handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
+	state := strings.TrimSpace(r.URL.Query().Get("state"))
+	code := strings.TrimSpace(r.URL.Query().Get("code"))
+	if state == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "missing state"})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"state": state, "code": code})
+}
+
+func parseOAuthProviderPath(path, suffix string) (string, store.ProviderCatalogEntry, bool) {
+	raw := strings.TrimPrefix(strings.TrimSpace(path), "/api/oauth/providers/")
+	provider := strings.TrimSuffix(raw, suffix)
+	provider = strings.TrimSuffix(provider, "/")
+	entry, ok := store.GetProviderCatalogEntry(provider)
+	if !ok || entry.AuthType != "oauth" {
+		return "", store.ProviderCatalogEntry{}, false
+	}
+	return provider, entry, true
+}
+
+func (s *Server) popOAuthSession(state, provider string) (oauthSession, bool) {
+	s.oauthMu.Lock()
+	defer s.oauthMu.Unlock()
+	session, ok := s.oauth[state]
+	if !ok || session.Provider != provider {
+		return oauthSession{}, false
+	}
+	delete(s.oauth, state)
+	return session, true
+}
+
+func (s *Server) exchangeOAuthCode(ctx context.Context, session oauthSession, code string) (proxy.OAuthRefreshResult, error) {
+	form := url.Values{}
+	form.Set("grant_type", "authorization_code")
+	form.Set("code", code)
+	form.Set("redirect_uri", session.RedirectURI)
+	form.Set("client_id", session.ClientID)
+	form.Set("code_verifier", session.CodeVerifier)
+	if session.ClientSecret != "" {
+		form.Set("client_secret", session.ClientSecret)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, session.TokenURL, strings.NewReader(form.Encode()))
+	if err != nil {
+		return proxy.OAuthRefreshResult{}, err
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Accept", "application/json")
+	resp, err := s.forwarder.HTTPClient().Do(req)
+	if err != nil {
+		return proxy.OAuthRefreshResult{}, err
+	}
+	defer resp.Body.Close()
+	rawBody, err := io.ReadAll(io.LimitReader(resp.Body, 2*1024*1024))
+	if err != nil {
+		return proxy.OAuthRefreshResult{}, err
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return proxy.OAuthRefreshResult{}, fmt.Errorf("oauth exchange failed with status %d", resp.StatusCode)
+	}
+	var payload map[string]interface{}
+	if err := json.Unmarshal(rawBody, &payload); err != nil {
+		return proxy.OAuthRefreshResult{}, err
+	}
+	result := proxy.OAuthRefreshResult{
+		AccessToken:  strings.TrimSpace(fmt.Sprint(payload["access_token"])),
+		RefreshToken: strings.TrimSpace(fmt.Sprint(payload["refresh_token"])),
+		TokenType:    strings.TrimSpace(fmt.Sprint(payload["token_type"])),
+		Raw:          payload,
+	}
+	if expiresIn, ok := payload["expires_in"]; ok {
+		if seconds, ok := parseInt64Loose(expiresIn); ok && seconds > 0 {
+			result.TokenExpiry = time.Now().UTC().Add(time.Duration(seconds) * time.Second).Format(time.RFC3339)
+		}
+	}
+	if result.AccessToken == "" || result.AccessToken == "<nil>" {
+		return proxy.OAuthRefreshResult{}, fmt.Errorf("oauth exchange response missing access_token")
+	}
+	if result.RefreshToken == "<nil>" {
+		result.RefreshToken = ""
+	}
+	return result, nil
+}
