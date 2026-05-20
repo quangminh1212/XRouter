@@ -2415,6 +2415,8 @@ const dashboardHTML = `<!doctype html>
     .card { background: #111827; border: 1px solid #1f2937; border-radius: 14px; padding: 14px; box-shadow: 0 10px 30px rgba(0,0,0,.18); }
     .label { color: #94a3b8; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; }
     .value { margin-top: 8px; font-size: 26px; font-weight: 700; }
+    .toolbar { display: grid; grid-template-columns: 1fr 180px 180px; gap: 10px; margin: 14px 0; }
+    .toolbar input, .toolbar select { background: #0b1220; color: #e2e8f0; border: 1px solid #334155; border-radius: 10px; padding: 10px 12px; }
     table { width: 100%; border-collapse: collapse; font-size: 13px; }
     th, td { border-bottom: 1px solid #1f2937; padding: 10px 8px; text-align: left; vertical-align: top; }
     th { color: #93c5fd; font-weight: 600; }
@@ -2439,6 +2441,17 @@ const dashboardHTML = `<!doctype html>
   </section>
   <section class="card">
     <h2>Recent Requests</h2>
+    <div class="toolbar">
+      <input id="searchInput" type="text" placeholder="Search model, path, error...">
+      <select id="providerFilter">
+        <option value="">All providers</option>
+      </select>
+      <select id="statusFilter">
+        <option value="">All statuses</option>
+        <option value="success">Success</option>
+        <option value="error">Error</option>
+      </select>
+    </div>
     <table>
       <thead><tr><th>Time</th><th>Status</th><th>Provider</th><th>Model</th><th>Path</th><th>Error</th></tr></thead>
       <tbody id="logs"><tr><td colspan="6">Loading...</td></tr></tbody>
@@ -2447,14 +2460,37 @@ const dashboardHTML = `<!doctype html>
   <script>
     const fmt = new Intl.NumberFormat();
     const money = new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 4 });
+    let currentLogs = [];
     function setStats(stats = {}) {
       totalRequests.textContent = fmt.format(stats.totalRequests || 0);
       promptTokens.textContent = fmt.format(stats.promptTokens || 0);
       completionTokens.textContent = fmt.format(stats.completionTokens || 0);
       totalCost.textContent = money.format(stats.totalCost || 0);
     }
+    function renderProviderFilter(items = []) {
+      const selected = providerFilter.value;
+      const providers = [...new Set(items.map(item => item.provider).filter(Boolean))].sort();
+      providerFilter.innerHTML = '<option value=\"\">All providers</option>' + providers.map(v => '<option value=\"' + v + '\">' + v + '</option>').join('');
+      providerFilter.value = providers.includes(selected) ? selected : '';
+    }
+    function applyFilters(items = []) {
+      const query = (searchInput.value || '').trim().toLowerCase();
+      const provider = providerFilter.value;
+      const status = statusFilter.value;
+      return items.filter(item => {
+        if (provider && item.provider !== provider) return false;
+        if (status === 'success' && Number(item.statusCode || 0) >= 400) return false;
+        if (status === 'error' && Number(item.statusCode || 0) < 400) return false;
+        if (!query) return true;
+        const haystack = [item.provider, item.model, item.path, item.error, String(item.statusCode || '')].join(' ').toLowerCase();
+        return haystack.includes(query);
+      });
+    }
     function setLogs(items = []) {
-      logs.innerHTML = items.length ? items.map(item => '<tr>' +
+      currentLogs = items;
+      renderProviderFilter(items);
+      const filtered = applyFilters(items);
+      logs.innerHTML = filtered.length ? filtered.map(item => '<tr>' +
         '<td>' + (item.timestamp || '') + '</td>' +
         '<td>' + (item.statusCode || '') + '</td>' +
         '<td><code>' + (item.provider || '') + '</code></td>' +
@@ -2479,6 +2515,10 @@ const dashboardHTML = `<!doctype html>
         setStats(payload.stats);
         setLogs(payload.logs || []);
       });
+    }
+    for (const element of [searchInput, providerFilter, statusFilter]) {
+      element.addEventListener('input', () => setLogs(currentLogs));
+      element.addEventListener('change', () => setLogs(currentLogs));
     }
   </script>
 </body>
