@@ -28,6 +28,11 @@ type ProviderConnection struct {
 	GlobalPriority       *int                   `json:"globalPriority,omitempty"`
 	DefaultModel         string                 `json:"defaultModel,omitempty"`
 	ProviderSpecificData map[string]interface{} `json:"providerSpecificData,omitempty"`
+	RateLimitedUntil     string                 `json:"rateLimitedUntil,omitempty"`
+	BackoffLevel         int                    `json:"backoffLevel,omitempty"`
+	LastError            string                 `json:"lastError,omitempty"`
+	ErrorCode            int                    `json:"errorCode,omitempty"`
+	TestStatus           string                 `json:"testStatus,omitempty"`
 	CreatedAt            string                 `json:"createdAt,omitempty"`
 	UpdatedAt            string                 `json:"updatedAt,omitempty"`
 }
@@ -253,10 +258,52 @@ func (s *Store) GetActiveConnections(provider string) []ProviderConnection {
 		if provider != "" && c.Provider != provider {
 			continue
 		}
+		if c.RateLimitedUntil != "" {
+			until, err := time.Parse(time.RFC3339, c.RateLimitedUntil)
+			if err == nil && until.After(time.Now()) {
+				continue
+			}
+		}
 		out = append(out, c)
 	}
 	sortConnections(out)
 	return out
+}
+
+func (s *Store) MarkConnectionCooldown(id string, until time.Time, status int, message string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.db.ProviderConnections {
+		if s.db.ProviderConnections[i].ID != id {
+			continue
+		}
+		s.db.ProviderConnections[i].RateLimitedUntil = until.UTC().Format(time.RFC3339)
+		s.db.ProviderConnections[i].BackoffLevel++
+		s.db.ProviderConnections[i].LastError = message
+		s.db.ProviderConnections[i].ErrorCode = status
+		s.db.ProviderConnections[i].TestStatus = "unavailable"
+		s.db.ProviderConnections[i].UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+		return s.persistLocked()
+	}
+	return fmt.Errorf("provider connection not found")
+}
+
+func (s *Store) ClearConnectionCooldown(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.db.ProviderConnections {
+		if s.db.ProviderConnections[i].ID != id {
+			continue
+		}
+		s.db.ProviderConnections[i].RateLimitedUntil = ""
+		s.db.ProviderConnections[i].BackoffLevel = 0
+		s.db.ProviderConnections[i].LastError = ""
+		s.db.ProviderConnections[i].ErrorCode = 0
+		s.db.ProviderConnections[i].TestStatus = "active"
+		s.db.ProviderConnections[i].UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+		return s.persistLocked()
+	}
+	return fmt.Errorf("provider connection not found")
 }
 
 func (s *Store) GetAllConnections() []ProviderConnection {

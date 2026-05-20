@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -99,6 +100,62 @@ func normalizeModelForUpstream(body map[string]interface{}, providerHint string)
 	return raw
 }
 
+func parseRetryAfter(value string, now time.Time) (time.Time, bool) {
+	raw := strings.TrimSpace(value)
+	if raw == "" {
+		return time.Time{}, false
+	}
+	if seconds, err := strconv.Atoi(raw); err == nil {
+		if seconds < 1 {
+			seconds = 1
+		}
+		return now.Add(time.Duration(seconds) * time.Second), true
+	}
+	if t, err := http.ParseTime(raw); err == nil && t.After(now) {
+		return t, true
+	}
+	return time.Time{}, false
+}
+
+func parseRateLimitReset(headers http.Header, now time.Time) (time.Time, bool) {
+	if retryAfter, ok := parseRetryAfter(headers.Get("Retry-After"), now); ok {
+		return retryAfter, true
+	}
+	for _, key := range []string{"x-ratelimit-reset", "x-rate-limit-reset", "ratelimit-reset"} {
+		value := strings.TrimSpace(headers.Get(key))
+		if value == "" {
+			continue
+		}
+		epoch, err := strconv.ParseInt(value, 10, 64)
+		if err != nil {
+			continue
+		}
+		if epoch > 10_000_000_000 {
+			t := time.UnixMilli(epoch)
+			if t.After(now) {
+				return t, true
+			}
+			continue
+		}
+		t := time.Unix(epoch, 0)
+		if t.After(now) {
+			return t, true
+		}
+	}
+	return time.Time{}, false
+}
+
+func getFallbackCooldown(status int) time.Duration {
+	switch status {
+	case 429:
+		return 15 * time.Second
+	case 502, 503, 504, 520, 521, 522, 524, 529:
+		return 8 * time.Second
+	default:
+		return 5 * time.Second
+	}
+}
+
 func (f *Forwarder) Forward(ctx context.Context, path string, requestBody []byte) (*http.Response, error) {
 	var body map[string]interface{}
 	if err := json.Unmarshal(requestBody, &body); err != nil {
@@ -146,13 +203,23 @@ func (f *Forwarder) Forward(ctx context.Context, path string, requestBody []byte
 		resp, err := f.client.Do(req)
 		if err != nil {
 			lastErr = err
+			_ = f.store.MarkConnectionCooldown(c.ID, time.Now().Add(5*time.Second), 0, err.Error())
 			continue
 		}
-		if resp.StatusCode >= 500 {
+		if resp.StatusCode == 429 || resp.StatusCode >= 500 {
+			now := time.Now()
+			until, ok := parseRateLimitReset(resp.Header, now)
+			if !ok {
+				until = now.Add(getFallbackCooldown(resp.StatusCode))
+			}
 			_, _ = io.Copy(io.Discard, resp.Body)
 			_ = resp.Body.Close()
 			lastErr = fmt.Errorf("upstream %s status %d", c.Provider, resp.StatusCode)
+			_ = f.store.MarkConnectionCooldown(c.ID, until, resp.StatusCode, lastErr.Error())
 			continue
+		}
+		if c.RateLimitedUntil != "" || c.TestStatus == "unavailable" || c.BackoffLevel > 0 {
+			_ = f.store.ClearConnectionCooldown(c.ID)
 		}
 		return resp, nil
 	}
