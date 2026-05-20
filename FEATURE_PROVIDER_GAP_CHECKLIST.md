@@ -62,7 +62,7 @@ Reference repos:
 ### 2) Media and non-chat endpoints
 
 - [x] Embeddings
-- [ ] Images generations
+- [x] Images generations
 - [ ] Images edits
 - [ ] Image-to-text / vision-specific media route
 - [x] Text-to-speech
@@ -157,7 +157,7 @@ Reference repos:
 - [ ] Add generic provider adapters for OpenAI-compatible, Anthropic-compatible, and Gemini-compatible upstreams
 - [x] Add `POST /v1/completions`
 - [ ] Add `POST /v1/embeddings`
-- [ ] Add `POST /v1/images/generations`
+- [x] Add `POST /v1/images/generations`
 - [ ] Add `POST /v1/audio/speech`
 - [ ] Add `POST /v1/audio/transcriptions`
 - [x] Add `POST /v1/search`
