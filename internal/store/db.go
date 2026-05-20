@@ -78,6 +78,7 @@ var providerCatalog = map[string]ProviderCatalogEntry{
 	"exa":                  {Provider: "exa", AuthType: "apikey", APIType: "search", BaseURL: "https://api.exa.ai"},
 	"exa-search":           {Provider: "exa-search", AuthType: "apikey", APIType: "search", BaseURL: "https://api.exa.ai"},
 	"perplexity-search":    {Provider: "perplexity-search", AuthType: "apikey", APIType: "search", BaseURL: "https://api.perplexity.ai"},
+	"google-pse-search":    {Provider: "google-pse-search", AuthType: "apikey", APIType: "search", BaseURL: "https://customsearch.googleapis.com/customsearch/v1"},
 	"claude":               {Provider: "claude", AuthType: "oauth", APIType: "anthropic", BaseURL: "https://api.anthropic.com", AuthorizeURL: "https://console.anthropic.com/v1/oauth/authorize", TokenURL: "https://console.anthropic.com/v1/oauth/token", ClientID: "claude-cli", Scopes: []string{"openid", "profile", "email", "offline_access"}, FallbackModels: []string{"claude/claude-3-5-sonnet-latest"}},
 	"codex":                {Provider: "codex", AuthType: "oauth", APIType: "openai", BaseURL: "https://api.openai.com", AuthorizeURL: "https://auth.openai.com/oauth/authorize", TokenURL: "https://auth.openai.com/oauth/token", ClientID: "codex-cli", Scopes: []string{"openid", "profile", "email", "offline_access"}, FallbackModels: []string{"codex/gpt-4o-mini"}},
 	"github":               {Provider: "github", AuthType: "oauth", APIType: "openai", BaseURL: "https://models.inference.ai.azure.com", FallbackModels: []string{"github/gpt-4o-mini"}},

@@ -106,6 +106,7 @@ func TestProviderCatalogIncludesSearchAliases(t *testing.T) {
 		"exa":               "https://api.exa.ai",
 		"exa-search":        "https://api.exa.ai",
 		"perplexity-search": "https://api.perplexity.ai",
+		"google-pse-search": "https://customsearch.googleapis.com/customsearch/v1",
 	}
 	seen := map[string]string{}
 	for _, provider := range payload.Providers {

@@ -453,7 +453,7 @@ Legend:
 | `glm-cn` | 9router, OmniRoute | apiKey, apikey | YES | Added Wave 3 OpenAI-compatible catalog + fallback model |
 | `glmt` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `google-pse` | 9router | apiKey | NO | Need adapter/auth/base URL/model transform |
-| `google-pse-search` | OmniRoute | search | NO | Need adapter/auth/base URL/model transform |
+| `google-pse-search` | OmniRoute | search | YES | Added Google Programmable Search adapter + catalog coverage |
 | `google-tts` | 9router | apiKey | NO | Need adapter/auth/base URL/model transform |
 | `grok` | CLIProxyAPI | core/oauth/sdk | YES | Added OAuth catalog alias to xAI flow + fallback model |
 | `grok-web` | 9router, OmniRoute | webCookie, web_cookie | NO | Need adapter/auth/base URL/model transform |

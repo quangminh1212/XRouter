@@ -836,6 +836,27 @@ func buildSearchRequest(ctx context.Context, c store.ProviderConnection, baseURL
 		return postJSONSearch(ctx, baseURL+"/search", c, map[string]interface{}{"query": query, "numResults": maxResults})
 	case "perplexity-search":
 		return postJSONSearch(ctx, baseURL+"/search", c, map[string]interface{}{"query": query, "max_results": maxResults})
+	case "google-pse-search":
+		u, err := url.Parse(baseURL)
+		if err != nil {
+			return nil, err
+		}
+		q := u.Query()
+		q.Set("key", c.APIKey)
+		q.Set("q", query)
+		q.Set("num", strconv.Itoa(maxResults))
+		if c.ProviderSpecificData != nil {
+			if cx, ok := c.ProviderSpecificData["cx"].(string); ok && strings.TrimSpace(cx) != "" {
+				q.Set("cx", strings.TrimSpace(cx))
+			}
+		}
+		u.RawQuery = q.Encode()
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Accept", "application/json")
+		return req, nil
 	default:
 		return nil, fmt.Errorf("search provider %s not supported", c.Provider)
 	}
@@ -867,6 +888,8 @@ func normalizeSearchResults(provider string, raw interface{}) []SearchResult {
 		return normalizeResultArray(root["organic"], "title", "link", "snippet")
 	case "tavily", "tavily-search", "exa", "exa-search", "perplexity-search":
 		return normalizeResultArray(root["results"], "title", "url", "content")
+	case "google-pse-search":
+		return normalizeResultArray(root["items"], "title", "link", "snippet")
 	}
 	return nil
 }
