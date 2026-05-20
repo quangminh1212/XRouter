@@ -1,0 +1,107 @@
+package app
+
+import (
+	"log"
+	"net/http"
+	"time"
+)
+
+func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
+	w.Header().Set("X-Powered-By", "xrouter")
+	s.mux.ServeHTTP(w, r)
+	if d := time.Since(start); d > 500*time.Millisecond {
+		log.Printf("slow request %s %s took %s", r.Method, r.URL.Path, d)
+	}
+}
+
+func (s *Server) routes() {
+	s.mux.HandleFunc("/api/health", s.handleHealth)
+	s.mux.HandleFunc("/api/version", s.handleVersion)
+	s.mux.HandleFunc("/api/settings", s.handleSettings)
+	s.mux.HandleFunc("/api/providers", s.handleProviders)
+	s.mux.HandleFunc("/api/providers/catalog", s.handleProviderCatalog)
+	s.mux.HandleFunc("/api/providers/cookie-import", s.handleProviderCookieImport)
+	s.mux.HandleFunc("/api/providers/", s.handleProviderByID)
+	s.mux.HandleFunc("/api/oauth/providers", s.handleOAuthProviders)
+	s.mux.HandleFunc("/api/oauth/providers/", s.handleOAuthProviderImport)
+	s.mux.HandleFunc("/api/oauth/providers/scan-local", s.handleOAuthProviderScanLocal)
+	s.mux.HandleFunc("/api/oauth/callback", s.handleOAuthCallback)
+	s.mux.HandleFunc("/api/mcp/servers", s.handleMCPServers)
+	s.mux.HandleFunc("/api/a2a/agents", s.handleA2AAgents)
+	s.mux.HandleFunc("/api/tunnels", s.handleTunnels)
+	s.mux.HandleFunc("/api/cli/config", s.handleCLIConfig)
+	s.mux.HandleFunc("/api/auth-files/", s.handleAuthFileByID)
+	s.mux.HandleFunc("/api/auth-files", s.handleAuthFiles)
+	s.mux.HandleFunc("/api/keys", s.handleAPIKeys)
+	s.mux.HandleFunc("/api/keys/", s.handleAPIKeyByID)
+	s.mux.HandleFunc("/api/models", s.handleModels)
+	s.mux.HandleFunc("/api/management/model-mappings", s.handleManagementModelMappings)
+	s.mux.HandleFunc("/api/management/model-aliases", s.handleManagementModelAliases)
+	s.mux.HandleFunc("/api/management/disabled-models", s.handleManagementDisabledModels)
+	s.mux.HandleFunc("/api/management/model-availability", s.handleManagementModelAvailability)
+	s.mux.HandleFunc("/api/management/routing-strategy", s.handleManagementRoutingStrategy)
+	s.mux.HandleFunc("/api/management/retry-config", s.handleManagementRetryConfig)
+	s.mux.HandleFunc("/api/management/proxy-pools/", s.handleManagementProxyPoolByID)
+	s.mux.HandleFunc("/api/management/proxy-pools", s.handleManagementProxyPools)
+	s.mux.HandleFunc("/api/management/provider-nodes/", s.handleManagementProviderNodeByID)
+	s.mux.HandleFunc("/api/management/provider-nodes", s.handleManagementProviderNodes)
+	s.mux.HandleFunc("/api/management/combo-models/", s.handleManagementComboModelByAlias)
+	s.mux.HandleFunc("/api/management/combo-models", s.handleManagementComboModels)
+	s.mux.HandleFunc("/api/management/route-policies/", s.handleManagementRoutePolicyByID)
+	s.mux.HandleFunc("/api/management/route-policies", s.handleManagementRoutePolicies)
+	s.mux.HandleFunc("/api/management/mcp-servers/", s.handleManagementMCPServerByID)
+	s.mux.HandleFunc("/api/management/mcp-servers", s.handleManagementMCPServers)
+	s.mux.HandleFunc("/api/management/a2a-agents/", s.handleManagementA2AAgentByID)
+	s.mux.HandleFunc("/api/management/a2a-agents", s.handleManagementA2AAgents)
+	s.mux.HandleFunc("/api/management/tunnels/", s.handleManagementTunnelByID)
+	s.mux.HandleFunc("/api/management/tunnels", s.handleManagementTunnels)
+	s.mux.HandleFunc("/api/quota", s.handleQuota)
+	s.mux.HandleFunc("/api/usage/summary", s.handleQuota)
+	s.mux.HandleFunc("/api/usage/stats", s.handleUsageStats)
+	s.mux.HandleFunc("/api/usage/stream", s.handleUsageStream)
+	s.mux.HandleFunc("/api/usage/logs/", s.handleUsageLogByID)
+	s.mux.HandleFunc("/api/usage/logs", s.handleUsageLogs)
+	s.mux.HandleFunc("/api/usage/history", s.handleUsageHistory)
+	s.mux.HandleFunc("/api/debug/db", s.handleDebugDB)
+	s.mux.HandleFunc("/api/monitoring/health", s.handleMonitoringHealth)
+	s.mux.HandleFunc("/dashboard", s.handleDashboard)
+	s.mux.HandleFunc("/v1/chat/completions", s.handleProxy)
+	s.mux.HandleFunc("/v1/completions", s.handleProxy)
+	s.mux.HandleFunc("/v1/messages", s.handleProxy)
+	s.mux.HandleFunc("/v1/messages/count_tokens", s.handleProxy)
+	s.mux.HandleFunc("/v1/responses", s.handleProxy)
+	s.mux.HandleFunc("/v1/responses/compact", s.handleProxy)
+	s.mux.HandleFunc("/v1/responses/stream", s.handleProxy)
+	s.mux.HandleFunc("/backend-api/codex/responses", s.handleProxy)
+	s.mux.HandleFunc("/v1/search", s.handleSearch)
+	s.mux.HandleFunc("/v1/web/search", s.handleSearch)
+	s.mux.HandleFunc("/v1/web/fetch", s.handleWebFetch)
+	s.mux.HandleFunc("/v1/embeddings", s.handleMediaProxy)
+	s.mux.HandleFunc("/v1/images/generations", s.handleMediaProxy)
+	s.mux.HandleFunc("/v1/images/edits", s.handleMediaProxy)
+	s.mux.HandleFunc("/v1/images/analyze", s.handleMediaProxy)
+	s.mux.HandleFunc("/v1/videos/generations", s.handleMediaProxy)
+	s.mux.HandleFunc("/v1/videos/edits", s.handleMediaProxy)
+	s.mux.HandleFunc("/v1/videos/extensions", s.handleMediaProxy)
+	s.mux.HandleFunc("/v1/videos/", s.handleVideoByID)
+	s.mux.HandleFunc("/v1/audio/voices", s.handleAudioVoices)
+	s.mux.HandleFunc("/v1/audio/generations", s.handleMediaProxy)
+	s.mux.HandleFunc("/v1/audio/speech", s.handleMediaProxy)
+	s.mux.HandleFunc("/v1/audio/transcriptions", s.handleMediaProxy)
+	s.mux.HandleFunc("/v1beta/models/", s.handleGeminiAction)
+	s.mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]interface{}{"name": "xrouter", "status": "ok", "uptimeSec": int(time.Since(s.startedAt).Seconds())})
+	})
+}
+
+func (s *Server) backgroundReload() {
+	ticker := time.NewTicker(3 * time.Second)
+	defer ticker.Stop()
+	for range ticker.C {
+		if err := s.store.Reload(); err != nil {
+			log.Printf("db reload failed: %v", err)
+		}
+		s.cleanupRateBuckets()
+	}
+}
