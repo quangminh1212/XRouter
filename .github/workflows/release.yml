@@ -1,0 +1,71 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            suffix: linux-amd64
+            ext: ""
+          - goos: linux
+            goarch: arm64
+            suffix: linux-arm64
+            ext: ""
+          - goos: windows
+            goarch: amd64
+            suffix: windows-amd64
+            ext: ".exe"
+          - goos: darwin
+            goarch: arm64
+            suffix: darwin-arm64
+            ext: ""
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: true
+
+      - name: Build
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: "0"
+        run: |
+          mkdir -p dist
+          name="xrouter-${{ matrix.suffix }}${{ matrix.ext }}"
+          go build -trimpath -ldflags "-s -w -X xrouter/internal/version.Version=${GITHUB_REF_NAME} -X xrouter/internal/version.Commit=${GITHUB_SHA} -X xrouter/internal/version.BuildDate=$(date -u +%Y-%m-%dT%H:%M:%SZ)" -o "dist/${name}" ./cmd/xrouter
+          cd dist
+          sha256sum "${name}" > "${name}.sha256"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: xrouter-${{ matrix.suffix }}
+          path: dist/*
+
+  publish:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*

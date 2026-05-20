@@ -1,4 +1,4 @@
-# XRouter
+﻿# XRouter
 
 XRouter is a lightweight Go router for OpenAI-compatible APIs. It reads the existing local `db.json` format used by XLab Router and exposes a small, low-memory HTTP API for health, settings, providers, models, usage summary, and upstream proxying.
 
@@ -77,6 +77,9 @@ Use `provider/model` names, for example `openai-compatible/gpt-test`, `anthropic
 go build -ldflags "-X xrouter/internal/version.Version=v0.1.0 -X xrouter/internal/version.Commit=abc123 -X xrouter/internal/version.Date=2026-05-20T00:00:00Z" ./cmd/xrouter
 ```
 
+## Release
+
+Push a tag matching `v*` to trigger `.github/workflows/release.yml`. The workflow builds static binaries for Linux amd64/arm64, Windows amd64 and macOS arm64, writes SHA256 files, and publishes them to a GitHub Release.
 ## Tests and CI
 
 Run the full suite locally:
