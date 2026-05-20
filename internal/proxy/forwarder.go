@@ -1116,7 +1116,7 @@ func mediaAPIType(path string) string {
 	switch path {
 	case "/v1/embeddings":
 		return "embedding"
-	case "/v1/images/generations":
+	case "/v1/images/generations", "/v1/images/edits":
 		return "image"
 	case "/v1/audio/speech":
 		return "tts"
@@ -1195,7 +1195,7 @@ func resolveMediaEndpoint(c store.ProviderConnection, path, apiType string) (str
 	case "embedding":
 		return joinOpenAIEndpoint(baseURL, "/v1/embeddings"), "openai", nil
 	case "image":
-		return joinOpenAIEndpoint(baseURL, "/v1/images/generations"), "openai", nil
+		return joinOpenAIEndpoint(baseURL, path), "openai", nil
 	case "tts":
 		return joinOpenAIEndpoint(baseURL, "/v1/audio/speech"), "openai", nil
 	case "stt":
