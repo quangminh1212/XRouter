@@ -27,6 +27,8 @@ type Forwarder struct {
 	dedup           map[string]*dedupEntry
 	modelsMu        sync.Mutex
 	modelsCache     map[string]modelsCacheEntry
+	rrMu            sync.Mutex
+	rrIndex         map[string]int
 }
 
 type dedupEntry struct {
@@ -60,6 +62,7 @@ func NewForwarder(st *store.Store) *Forwarder {
 		store:       st,
 		dedup:       map[string]*dedupEntry{},
 		modelsCache: map[string]modelsCacheEntry{},
+		rrIndex:     map[string]int{},
 	}
 }
 
@@ -369,6 +372,45 @@ func maxForwardAttempts(settings store.Settings) int {
 		return 3
 	}
 	return settings.MaxRetries
+}
+
+func rotateCandidates(items []store.ProviderConnection, offset int) []store.ProviderConnection {
+	if len(items) == 0 {
+		return items
+	}
+	offset = offset % len(items)
+	if offset == 0 {
+		return append([]store.ProviderConnection(nil), items...)
+	}
+	out := make([]store.ProviderConnection, 0, len(items))
+	out = append(out, items[offset:]...)
+	out = append(out, items[:offset]...)
+	return out
+}
+
+func (f *Forwarder) reorderCandidates(scope, model string, candidates []store.ProviderConnection) []store.ProviderConnection {
+	settings := f.store.GetSettings()
+	switch settings.ComboStrategy {
+	case "round_robin":
+		f.rrMu.Lock()
+		defer f.rrMu.Unlock()
+		key := "global"
+		offset := 0
+		if len(candidates) > 0 {
+			offset = f.rrIndex[key] % len(candidates)
+		}
+		f.rrIndex[key] = f.rrIndex[key] + 1
+		return rotateCandidates(candidates, offset)
+	case "sticky_round_robin":
+		sum := sha1.Sum([]byte(scope + "|" + model))
+		offset := 0
+		if len(candidates) > 0 {
+			offset = int(sum[0]) % len(candidates)
+		}
+		return rotateCandidates(candidates, offset)
+	default:
+		return append([]store.ProviderConnection(nil), candidates...)
+	}
 }
 
 type SearchRequest struct {
@@ -1259,11 +1301,12 @@ func (f *Forwarder) Forward(ctx context.Context, scope, path string, requestBody
 	if len(candidates) == 0 {
 		return nil, fmt.Errorf("no active provider connections")
 	}
+	candidates = f.reorderCandidates(scope, model, candidates)
 	maxAttempts := maxForwardAttempts(f.store.GetSettings())
 	attempts := 0
 
 	upstreamBody := normalizeModelForUpstream(cloneRequestBody(body), providerHint)
-	if !isStreaming(body) && strings.TrimSpace(poolHint) == "" && strings.TrimSpace(nodeHint) == "" && !anyConnectionHasModelControls(candidates) {
+	if !isStreaming(body) && f.store.GetSettings().ComboStrategy == "fallback" && strings.TrimSpace(poolHint) == "" && strings.TrimSpace(nodeHint) == "" && !anyConnectionHasModelControls(candidates) {
 		if resp, err, handled := f.forwardDedup(ctx, scope, path, upstreamBody, model, providerHint); handled {
 			return resp, err
 		}
