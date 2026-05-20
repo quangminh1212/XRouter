@@ -197,6 +197,20 @@ type A2AAgent struct {
 	UpdatedAt    string            `json:"updatedAt,omitempty"`
 }
 
+type TunnelEndpoint struct {
+	ID          string            `json:"id"`
+	Name        string            `json:"name"`
+	Provider    string            `json:"provider,omitempty"`
+	PublicURL   string            `json:"publicUrl"`
+	LocalTarget string            `json:"localTarget,omitempty"`
+	Protocol    string            `json:"protocol,omitempty"`
+	Region      string            `json:"region,omitempty"`
+	Metadata    map[string]string `json:"metadata,omitempty"`
+	Enabled     bool              `json:"enabled"`
+	CreatedAt   string            `json:"createdAt,omitempty"`
+	UpdatedAt   string            `json:"updatedAt,omitempty"`
+}
+
 type DailySummary struct {
 	Requests int64   `json:"requests"`
 	Cost     float64 `json:"cost"`
@@ -236,6 +250,7 @@ type DB struct {
 	RoutePolicies       []RoutePolicy          `json:"routePolicies"`
 	MCPServers          []MCPServer            `json:"mcpServers"`
 	A2AAgents           []A2AAgent             `json:"a2aAgents"`
+	TunnelEndpoints     []TunnelEndpoint       `json:"tunnelEndpoints"`
 }
 
 type Store struct {
@@ -336,6 +351,9 @@ func (s *Store) load() error {
 	if db.A2AAgents == nil {
 		db.A2AAgents = []A2AAgent{}
 	}
+	if db.TunnelEndpoints == nil {
+		db.TunnelEndpoints = []TunnelEndpoint{}
+	}
 	s.db = db
 	s.rawRoot = root
 	s.loadedAt = time.Now()
@@ -359,17 +377,18 @@ func defaultDB() DB {
 			MaxRetries:                 0,
 			MaxCooldownSeconds:         90,
 		},
-		ModelAliases:  map[string]string{},
-		Pricing:       map[string]interface{}{},
-		UsageData:     UsageData{History: []UsageEntry{}, TotalRequestsLifetime: 0, DailySummary: map[string]DailySummary{}},
-		RequestLogs:   []RequestLog{},
-		AuthFiles:     []AuthFile{},
-		ProxyPools:    []ProxyPool{},
-		ProviderNodes: []ProviderNode{},
-		ComboModels:   []ComboModel{},
-		RoutePolicies: []RoutePolicy{},
-		MCPServers:    []MCPServer{},
-		A2AAgents:     []A2AAgent{},
+		ModelAliases:    map[string]string{},
+		Pricing:         map[string]interface{}{},
+		UsageData:       UsageData{History: []UsageEntry{}, TotalRequestsLifetime: 0, DailySummary: map[string]DailySummary{}},
+		RequestLogs:     []RequestLog{},
+		AuthFiles:       []AuthFile{},
+		ProxyPools:      []ProxyPool{},
+		ProviderNodes:   []ProviderNode{},
+		ComboModels:     []ComboModel{},
+		RoutePolicies:   []RoutePolicy{},
+		MCPServers:      []MCPServer{},
+		A2AAgents:       []A2AAgent{},
+		TunnelEndpoints: []TunnelEndpoint{},
 	}
 }
 
@@ -481,6 +500,9 @@ func (s *Store) persistLocked() error {
 		return err
 	}
 	if s.rawRoot["a2aAgents"], err = mustJSON(s.db.A2AAgents); err != nil {
+		return err
+	}
+	if s.rawRoot["tunnelEndpoints"], err = mustJSON(s.db.TunnelEndpoints); err != nil {
 		return err
 	}
 	payload, err := json.MarshalIndent(s.rawRoot, "", "  ")
@@ -1538,6 +1560,91 @@ func (s *Store) DeleteA2AAgent(id string) error {
 		return fmt.Errorf("a2a agent not found")
 	}
 	s.db.A2AAgents = next
+	return s.persistLocked()
+}
+
+func (s *Store) ListTunnelEndpoints(includeDisabled bool) []TunnelEndpoint {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]TunnelEndpoint, 0, len(s.db.TunnelEndpoints))
+	for _, item := range s.db.TunnelEndpoints {
+		if !includeDisabled && !item.Enabled {
+			continue
+		}
+		out = append(out, item)
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].CreatedAt > out[j].CreatedAt })
+	return out
+}
+
+func (s *Store) CreateTunnelEndpoint(item TunnelEndpoint) (TunnelEndpoint, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := time.Now().UTC().Format(time.RFC3339)
+	item.ID = randID("tun_")
+	item.Name = strings.TrimSpace(item.Name)
+	item.Provider = strings.ToLower(strings.TrimSpace(item.Provider))
+	item.PublicURL = strings.TrimSpace(item.PublicURL)
+	item.LocalTarget = strings.TrimSpace(item.LocalTarget)
+	item.Protocol = strings.ToLower(strings.TrimSpace(item.Protocol))
+	item.Region = strings.TrimSpace(item.Region)
+	item.CreatedAt = now
+	item.UpdatedAt = now
+	s.db.TunnelEndpoints = append(s.db.TunnelEndpoints, item)
+	return item, s.persistLocked()
+}
+
+func (s *Store) UpdateTunnelEndpoint(id string, patch map[string]interface{}) (TunnelEndpoint, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	idx := -1
+	for i, item := range s.db.TunnelEndpoints {
+		if item.ID == id {
+			idx = i
+			break
+		}
+	}
+	if idx < 0 {
+		return TunnelEndpoint{}, fmt.Errorf("tunnel endpoint not found")
+	}
+	raw, _ := json.Marshal(s.db.TunnelEndpoints[idx])
+	merged := map[string]interface{}{}
+	_ = json.Unmarshal(raw, &merged)
+	for k, v := range patch {
+		merged[k] = v
+	}
+	merged["updatedAt"] = time.Now().UTC().Format(time.RFC3339)
+	nextRaw, _ := json.Marshal(merged)
+	var next TunnelEndpoint
+	if err := json.Unmarshal(nextRaw, &next); err != nil {
+		return TunnelEndpoint{}, err
+	}
+	next.Name = strings.TrimSpace(next.Name)
+	next.Provider = strings.ToLower(strings.TrimSpace(next.Provider))
+	next.PublicURL = strings.TrimSpace(next.PublicURL)
+	next.LocalTarget = strings.TrimSpace(next.LocalTarget)
+	next.Protocol = strings.ToLower(strings.TrimSpace(next.Protocol))
+	next.Region = strings.TrimSpace(next.Region)
+	s.db.TunnelEndpoints[idx] = next
+	return next, s.persistLocked()
+}
+
+func (s *Store) DeleteTunnelEndpoint(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	next := s.db.TunnelEndpoints[:0]
+	found := false
+	for _, item := range s.db.TunnelEndpoints {
+		if item.ID == id {
+			found = true
+			continue
+		}
+		next = append(next, item)
+	}
+	if !found {
+		return fmt.Errorf("tunnel endpoint not found")
+	}
+	s.db.TunnelEndpoints = next
 	return s.persistLocked()
 }
 
