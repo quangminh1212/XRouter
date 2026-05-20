@@ -87,6 +87,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/mcp/servers", s.handleMCPServers)
 	s.mux.HandleFunc("/api/a2a/agents", s.handleA2AAgents)
 	s.mux.HandleFunc("/api/tunnels", s.handleTunnels)
+	s.mux.HandleFunc("/api/cli/config", s.handleCLIConfig)
 	s.mux.HandleFunc("/api/auth-files/", s.handleAuthFileByID)
 	s.mux.HandleFunc("/api/auth-files", s.handleAuthFiles)
 	s.mux.HandleFunc("/api/keys", s.handleAPIKeys)
@@ -572,6 +573,79 @@ func (s *Server) handleTunnels(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{"tunnels": s.store.ListTunnelEndpoints(false)})
+}
+
+func (s *Server) handleCLIConfig(w http.ResponseWriter, r *http.Request) {
+	if !isLocalOnlyRequest(r) {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "cli config api is restricted to localhost"})
+		return
+	}
+	if r.Method != http.MethodGet {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	tool := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("tool")))
+	if tool == "" {
+		tool = "generic"
+	}
+	scheme := "http"
+	if r.TLS != nil {
+		scheme = "https"
+	}
+	baseURL := fmt.Sprintf("%s://%s", scheme, r.Host)
+	apiKeys := s.store.GetAPIKeysRaw()
+	apiKeyValue := ""
+	apiKeyName := ""
+	if len(apiKeys) > 0 {
+		apiKeyValue = apiKeys[0].Key
+		apiKeyName = apiKeys[0].Name
+	}
+	model := ""
+	provider := ""
+	for _, conn := range s.store.GetAllConnectionsRaw() {
+		if !conn.IsActive {
+			continue
+		}
+		if model == "" && strings.TrimSpace(conn.DefaultModel) != "" {
+			model = strings.TrimSpace(conn.DefaultModel)
+			provider = conn.Provider
+			break
+		}
+	}
+	if model == "" {
+		fallbacks := store.GetFallbackModels()
+		if len(fallbacks) > 0 {
+			model = fallbacks[0]["fullModel"]
+		}
+	}
+	response := map[string]interface{}{
+		"tool":         tool,
+		"baseUrl":      baseURL,
+		"chatPath":     "/v1/chat/completions",
+		"modelsPath":   "/api/models",
+		"apiKeyName":   apiKeyName,
+		"apiKeyValue":  apiKeyValue,
+		"defaultModel": model,
+		"provider":     provider,
+		"headers": map[string]string{
+			"Authorization": "Bearer " + apiKeyValue,
+			"Content-Type":  "application/json",
+		},
+		"env": map[string]string{
+			"OPENAI_BASE_URL": baseURL + "/v1",
+			"OPENAI_API_KEY":  apiKeyValue,
+			"OPENAI_MODEL":    model,
+		},
+		"examples": map[string]string{
+			"curl": fmt.Sprintf(`curl %s/v1/chat/completions -H "Authorization: Bearer %s" -H "Content-Type: application/json" -d "{\"model\":\"%s\",\"messages\":[{\"role\":\"user\",\"content\":\"hello\"}]}"`, baseURL, apiKeyValue, model),
+		},
+	}
+	switch tool {
+	case "openai", "openai-compatible", "generic":
+	default:
+		response["note"] = "tool preset not specialized; returned generic OpenAI-compatible config"
+	}
+	writeJSON(w, http.StatusOK, response)
 }
 
 func (s *Server) handleManagementMCPServers(w http.ResponseWriter, r *http.Request) {

@@ -892,6 +892,14 @@ func (s *Store) GetAPIKeys() []APIKey {
 	return out
 }
 
+func (s *Store) GetAPIKeysRaw() []APIKey {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]APIKey, len(s.db.APIKeys))
+	copy(out, s.db.APIKeys)
+	return out
+}
+
 func (s *Store) CreateAPIKey(name, key string, requestsPerMinute int) (APIKey, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
