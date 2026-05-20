@@ -571,6 +571,26 @@ func (s *Store) DeleteAPIKey(id string) error {
 	return s.persistLocked()
 }
 
+func (s *Store) RotateAPIKey(id string, newKey string) (APIKey, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	newKey = strings.TrimSpace(newKey)
+	if newKey == "" {
+		return APIKey{}, fmt.Errorf("new api key is required")
+	}
+	for i := range s.db.APIKeys {
+		if s.db.APIKeys[i].ID != id {
+			continue
+		}
+		s.db.APIKeys[i].Key = newKey
+		if err := s.persistLocked(); err != nil {
+			return APIKey{}, err
+		}
+		return s.db.APIKeys[i], nil
+	}
+	return APIKey{}, fmt.Errorf("api key not found")
+}
+
 func (s *Store) GetModelAliases() map[string]string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

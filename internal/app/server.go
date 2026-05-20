@@ -1,6 +1,8 @@
 package app
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -28,6 +30,12 @@ type Server struct {
 type rateBucket struct {
 	windowStart time.Time
 	count       int
+}
+
+func generateAPIKey() string {
+	buf := make([]byte, 24)
+	_, _ = rand.Read(buf)
+	return "xr_" + hex.EncodeToString(buf)
 }
 
 func NewServer() (*Server, error) {
@@ -147,6 +155,10 @@ func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		writeJSON(w, http.StatusOK, s.store.GetSettings())
 	case http.MethodPatch:
+		if !isLocalOnlyRequest(r) {
+			writeJSON(w, http.StatusForbidden, map[string]string{"error": "settings update is restricted to localhost"})
+			return
+		}
 		var patch map[string]interface{}
 		if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
@@ -263,11 +275,41 @@ func (s *Server) handleAPIKeyByID(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusForbidden, map[string]string{"error": "api key management is restricted to localhost"})
 		return
 	}
+	path := strings.TrimPrefix(r.URL.Path, "/api/keys/")
+	if strings.HasSuffix(path, "/rotate") {
+		if r.Method != http.MethodPost {
+			writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+			return
+		}
+		id := strings.TrimSpace(strings.TrimSuffix(path, "/rotate"))
+		if id == "" {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "key id is required"})
+			return
+		}
+		var body struct {
+			Key string `json:"key"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+			return
+		}
+		if strings.TrimSpace(body.Key) == "" {
+			body.Key = generateAPIKey()
+		}
+		item, err := s.store.RotateAPIKey(id, body.Key)
+		if err != nil {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
+			return
+		}
+		item.Key = body.Key
+		writeJSON(w, http.StatusOK, item)
+		return
+	}
 	if r.Method != http.MethodDelete {
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
 		return
 	}
-	id := strings.TrimPrefix(r.URL.Path, "/api/keys/")
+	id := strings.TrimSpace(path)
 	id = strings.TrimSpace(id)
 	if id == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "key id is required"})
