@@ -159,6 +159,32 @@ func TestProviderCatalogIncludesTTSProviders(t *testing.T) {
 	}
 }
 
+func TestProviderCatalogIncludesImageProviders(t *testing.T) {
+	srv := newTestServer(t)
+	req := httptest.NewRequest(http.MethodGet, "/api/providers/catalog?apiType=image&authType=apikey", nil)
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	var payload struct {
+		Providers []store.ProviderCatalogEntry `json:"providers"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	seen := map[string]string{}
+	for _, provider := range payload.Providers {
+		if provider.APIType != "image" || provider.AuthType != "apikey" {
+			t.Fatalf("unexpected filtered provider: %#v", provider)
+		}
+		seen[provider.Provider] = provider.BaseURL
+	}
+	if got := seen["black-forest-labs"]; got != "https://api.bfl.ai" {
+		t.Fatalf("expected black-forest-labs baseUrl, got %q", got)
+	}
+}
+
 func TestProviderCatalogIncludesWebCookieProviders(t *testing.T) {
 	srv := newTestServer(t)
 	req := httptest.NewRequest(http.MethodGet, "/api/providers/catalog?authType=web_cookie", nil)

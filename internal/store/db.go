@@ -85,6 +85,7 @@ var providerCatalog = map[string]ProviderCatalogEntry{
 	"perplexity-search":    {Provider: "perplexity-search", AuthType: "apikey", APIType: "search", BaseURL: "https://api.perplexity.ai"},
 	"google-pse-search":    {Provider: "google-pse-search", AuthType: "apikey", APIType: "search", BaseURL: "https://customsearch.googleapis.com/customsearch/v1"},
 	"cloudflare-ai":        {Provider: "cloudflare-ai", AuthType: "apikey", APIType: "openai", BaseURL: "https://api.cloudflare.com/client/v4/accounts/{accountId}/ai/v1"},
+	"black-forest-labs":    {Provider: "black-forest-labs", AuthType: "apikey", APIType: "image", BaseURL: "https://api.bfl.ai", FallbackModels: []string{"black-forest-labs/flux-2-pro"}},
 	"chatgpt-web":          {Provider: "chatgpt-web", AuthType: "web_cookie", APIType: "openai", BaseURL: "https://chatgpt.com/backend-api", FallbackModels: []string{"chatgpt-web/gpt-4o-mini"}},
 	"gemini-web":           {Provider: "gemini-web", AuthType: "web_cookie", APIType: "openai", BaseURL: "https://gemini.google.com", FallbackModels: []string{"gemini-web/gemini-1.5-flash"}},
 	"deepseek-web":         {Provider: "deepseek-web", AuthType: "web_cookie", APIType: "openai", BaseURL: "https://chat.deepseek.com", FallbackModels: []string{"deepseek-web/deepseek-chat"}},

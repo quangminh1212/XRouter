@@ -185,6 +185,16 @@ func TestResolveMediaEndpointTTSProviders(t *testing.T) {
 	}
 }
 
+func TestResolveMediaEndpointBlackForestLabs(t *testing.T) {
+	got, mode, err := resolveMediaEndpoint(store.ProviderConnection{Provider: "black-forest-labs"}, "/v1/images/generations", "image")
+	if err != nil {
+		t.Fatalf("black-forest-labs endpoint failed: %v", err)
+	}
+	if got != "https://api.bfl.ai" || mode != "black-forest-labs" {
+		t.Fatalf("expected https://api.bfl.ai/black-forest-labs, got %s/%s", got, mode)
+	}
+}
+
 func TestShouldRefreshOAuthToken(t *testing.T) {
 	now := time.Date(2026, 5, 20, 12, 0, 0, 0, time.UTC)
 	c1 := store.ProviderConnection{AuthType: "oauth", RefreshToken: "r1", TokenExpiry: now.Add(4 * time.Minute).Format(time.RFC3339)}

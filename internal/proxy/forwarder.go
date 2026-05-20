@@ -1550,7 +1550,7 @@ func (f *Forwarder) forwardMediaWithConnection(ctx context.Context, c store.Prov
 }
 
 func transformMediaRequest(c store.ProviderConnection, apiType, endpoint string, body []byte, contentType string) (string, []byte, string, error) {
-	if apiType != "tts" {
+	if apiType != "tts" && apiType != "image" {
 		return endpoint, body, contentType, nil
 	}
 	var payload map[string]interface{}
@@ -1598,8 +1598,67 @@ func transformMediaRequest(c store.ProviderConnection, apiType, endpoint string,
 			},
 		})
 		return endpoint, next, "application/json", nil
+	case "black-forest-labs":
+		modelID := payloadString(payload, "model")
+		if strings.Contains(modelID, "/") {
+			modelID = strings.TrimSpace(strings.SplitN(modelID, "/", 2)[1])
+		}
+		endpointPath, ok := mapBlackForestLabsEndpoint(modelID)
+		if !ok {
+			return endpoint, body, contentType, fmt.Errorf("unsupported black-forest-labs model %s", modelID)
+		}
+		next := map[string]interface{}{
+			"prompt": payloadString(payload, "prompt"),
+		}
+		if size := payloadString(payload, "size"); strings.Contains(size, "x") {
+			parts := strings.SplitN(size, "x", 2)
+			if len(parts) == 2 {
+				if width, err := strconv.Atoi(strings.TrimSpace(parts[0])); err == nil {
+					next["width"] = width
+				}
+				if height, err := strconv.Atoi(strings.TrimSpace(parts[1])); err == nil {
+					next["height"] = height
+				}
+			}
+		}
+		if format := payloadString(payload, "response_format"); format != "" {
+			next["output_format"] = format
+		} else {
+			next["output_format"] = "png"
+		}
+		raw, _ := json.Marshal(next)
+		return strings.TrimRight(endpoint, "/") + endpointPath, raw, "application/json", nil
 	default:
 		return endpoint, body, contentType, nil
+	}
+}
+
+func mapBlackForestLabsEndpoint(model string) (string, bool) {
+	switch strings.TrimSpace(model) {
+	case "flux-2-max":
+		return "/v1/flux-2-max", true
+	case "flux-2-pro":
+		return "/v1/flux-2-pro", true
+	case "flux-2-flex":
+		return "/v1/flux-2-flex", true
+	case "flux-2-klein-9b":
+		return "/v1/flux-2-klein-9b", true
+	case "flux-2-klein-4b":
+		return "/v1/flux-2-klein-4b", true
+	case "flux-kontext-pro":
+		return "/v1/flux-kontext-pro", true
+	case "flux-kontext-max":
+		return "/v1/flux-kontext-max", true
+	case "flux-pro-1.1":
+		return "/v1/flux-pro-1.1", true
+	case "flux-pro-1.1-ultra":
+		return "/v1/flux-pro-1.1-ultra", true
+	case "flux-dev":
+		return "/v1/flux-dev", true
+	case "flux-pro":
+		return "/v1/flux-pro", true
+	default:
+		return "", false
 	}
 }
 
@@ -1612,7 +1671,7 @@ func payloadString(payload map[string]interface{}, key string) string {
 }
 
 func applyMediaProviderHeaders(req *http.Request, c store.ProviderConnection, apiType string) {
-	if apiType != "tts" {
+	if apiType != "tts" && apiType != "image" {
 		return
 	}
 	switch c.Provider {
@@ -1627,6 +1686,11 @@ func applyMediaProviderHeaders(req *http.Request, c store.ProviderConnection, ap
 			req.Header.Del("Authorization")
 		}
 		req.Header.Set("Cartesia-Version", "2024-06-10")
+	case "black-forest-labs":
+		if c.APIKey != "" {
+			req.Header.Set("x-key", c.APIKey)
+			req.Header.Del("Authorization")
+		}
 	}
 }
 
@@ -1645,6 +1709,9 @@ func resolveMediaEndpoint(c store.ProviderConnection, path, apiType string) (str
 	case "embedding":
 		return joinOpenAIEndpoint(baseURL, "/v1/embeddings"), "openai", nil
 	case "image":
+		if c.Provider == "black-forest-labs" {
+			return baseURL, "black-forest-labs", nil
+		}
 		return joinOpenAIEndpoint(baseURL, path), "openai", nil
 	case "vision":
 		return joinOpenAIEndpoint(baseURL, "/v1/chat/completions"), "openai", nil
