@@ -93,7 +93,7 @@ Reference repos:
 - [x] Disabled model management
 - [x] Model availability checks
 - [x] Routing strategy management
-- [ ] Retry/max retry interval management
+- [x] Retry/max retry interval management
 - [ ] OAuth excluded models / model alias controls
 - [ ] Auth file upload/download/index flows
 - [ ] Vertex credential import flow
