@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"xrouter/internal/proxy"
@@ -20,6 +21,13 @@ type Server struct {
 	forwarder *proxy.Forwarder
 	mux       *http.ServeMux
 	startedAt time.Time
+	limits    map[string]*rateBucket
+	limitMu   sync.Mutex
+}
+
+type rateBucket struct {
+	windowStart time.Time
+	count       int
 }
 
 func NewServer() (*Server, error) {
@@ -27,7 +35,7 @@ func NewServer() (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	s := &Server{store: st, forwarder: proxy.NewForwarder(st), mux: http.NewServeMux(), startedAt: time.Now()}
+	s := &Server{store: st, forwarder: proxy.NewForwarder(st), mux: http.NewServeMux(), startedAt: time.Now(), limits: map[string]*rateBucket{}}
 	s.routes()
 	go s.backgroundReload()
 	return s, nil
@@ -70,23 +78,62 @@ func (s *Server) backgroundReload() {
 		if err := s.store.Reload(); err != nil {
 			log.Printf("db reload failed: %v", err)
 		}
+		s.cleanupRateBuckets()
 	}
 }
 
-func (s *Server) authorize(r *http.Request) error {
+func (s *Server) authorize(r *http.Request) (store.APIKey, error) {
 	settings := s.store.GetSettings()
 	if !settings.RequireAPIKey {
-		return nil
+		return store.APIKey{}, nil
 	}
 	auth := strings.TrimSpace(r.Header.Get("Authorization"))
 	if auth == "" || !strings.HasPrefix(strings.ToLower(auth), "bearer ") {
-		return fmt.Errorf("missing bearer token")
+		return store.APIKey{}, fmt.Errorf("missing bearer token")
 	}
 	key := strings.TrimSpace(auth[len("Bearer "):])
-	if !s.store.ValidateAPIKey(key) {
-		return fmt.Errorf("invalid api key")
+	apiKey, ok := s.store.GetAPIKeyByValue(key)
+	if !ok {
+		return store.APIKey{}, fmt.Errorf("invalid api key")
 	}
-	return nil
+	if !s.allowAPIKey(apiKey, settings.DefaultRequestsPerMinute) {
+		return store.APIKey{}, fmt.Errorf("rate limit exceeded")
+	}
+	return apiKey, nil
+}
+
+func (s *Server) allowAPIKey(apiKey store.APIKey, defaultLimit int) bool {
+	limit := apiKey.RequestsPerMinute
+	if limit <= 0 {
+		limit = defaultLimit
+	}
+	if limit <= 0 {
+		return true
+	}
+	now := time.Now()
+	s.limitMu.Lock()
+	defer s.limitMu.Unlock()
+	bucket := s.limits[apiKey.ID]
+	if bucket == nil || now.Sub(bucket.windowStart) >= time.Minute {
+		s.limits[apiKey.ID] = &rateBucket{windowStart: now, count: 1}
+		return true
+	}
+	if bucket.count >= limit {
+		return false
+	}
+	bucket.count++
+	return true
+}
+
+func (s *Server) cleanupRateBuckets() {
+	cutoff := time.Now().Add(-2 * time.Minute)
+	s.limitMu.Lock()
+	defer s.limitMu.Unlock()
+	for key, bucket := range s.limits {
+		if bucket.windowStart.Before(cutoff) {
+			delete(s.limits, key)
+		}
+	}
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
@@ -191,14 +238,15 @@ func (s *Server) handleAPIKeys(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]interface{}{"keys": s.store.GetAPIKeys()})
 	case http.MethodPost:
 		var body struct {
-			Name string `json:"name"`
-			Key  string `json:"key"`
+			Name              string `json:"name"`
+			Key               string `json:"key"`
+			RequestsPerMinute int    `json:"requestsPerMinute"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 			return
 		}
-		item, err := s.store.CreateAPIKey(body.Name, body.Key)
+		item, err := s.store.CreateAPIKey(body.Name, body.Key, body.RequestsPerMinute)
 		if err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 			return
@@ -501,7 +549,11 @@ func (s *Server) handleProxy(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
 		return
 	}
-	if err := s.authorize(r); err != nil {
+	if _, err := s.authorize(r); err != nil {
+		if strings.Contains(err.Error(), "rate limit exceeded") {
+			writeJSON(w, http.StatusTooManyRequests, map[string]string{"error": err.Error()})
+			return
+		}
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": err.Error()})
 		return
 	}

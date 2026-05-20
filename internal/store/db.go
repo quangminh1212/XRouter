@@ -41,10 +41,11 @@ type ProviderConnection struct {
 }
 
 type APIKey struct {
-	ID        string `json:"id"`
-	Key       string `json:"key"`
-	Name      string `json:"name"`
-	CreatedAt string `json:"createdAt,omitempty"`
+	ID                string `json:"id"`
+	Key               string `json:"key"`
+	Name              string `json:"name"`
+	RequestsPerMinute int    `json:"requestsPerMinute,omitempty"`
+	CreatedAt         string `json:"createdAt,omitempty"`
 }
 
 type UsageEntry struct {
@@ -79,6 +80,7 @@ type Settings struct {
 	ObservabilityEnabled       bool              `json:"observabilityEnabled"`
 	ObservabilityMaxRecords    int               `json:"observabilityMaxRecords"`
 	ForcedModelMappings        map[string]string `json:"forcedModelMappings,omitempty"`
+	DefaultRequestsPerMinute   int               `json:"defaultRequestsPerMinute,omitempty"`
 }
 
 type DB struct {
@@ -500,6 +502,17 @@ func (s *Store) ValidateAPIKey(key string) bool {
 	return false
 }
 
+func (s *Store) GetAPIKeyByValue(key string) (APIKey, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, item := range s.db.APIKeys {
+		if item.Key == key {
+			return item, true
+		}
+	}
+	return APIKey{}, false
+}
+
 func maskAPIKey(raw string) string {
 	trimmed := strings.TrimSpace(raw)
 	if len(trimmed) <= 8 {
@@ -519,7 +532,7 @@ func (s *Store) GetAPIKeys() []APIKey {
 	return out
 }
 
-func (s *Store) CreateAPIKey(name, key string) (APIKey, error) {
+func (s *Store) CreateAPIKey(name, key string, requestsPerMinute int) (APIKey, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	name = strings.TrimSpace(name)
@@ -529,10 +542,11 @@ func (s *Store) CreateAPIKey(name, key string) (APIKey, error) {
 	}
 	now := time.Now().UTC().Format(time.RFC3339)
 	item := APIKey{
-		ID:        randID("key_"),
-		Key:       key,
-		Name:      name,
-		CreatedAt: now,
+		ID:                randID("key_"),
+		Key:               key,
+		Name:              name,
+		RequestsPerMinute: requestsPerMinute,
+		CreatedAt:         now,
 	}
 	s.db.APIKeys = append(s.db.APIKeys, item)
 	return item, s.persistLocked()
