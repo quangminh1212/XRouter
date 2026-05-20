@@ -206,6 +206,13 @@ func extractPoolHint(body map[string]interface{}) string {
 	return ""
 }
 
+func extractNodeHint(body map[string]interface{}) string {
+	if v, ok := body["node"].(string); ok {
+		return strings.TrimSpace(v)
+	}
+	return ""
+}
+
 func normalizeModelForUpstream(body map[string]interface{}, providerHint string) []byte {
 	if providerHint != "" {
 		if model, ok := body["model"].(string); ok && strings.HasPrefix(model, providerHint+"/") {
@@ -1145,7 +1152,9 @@ func (f *Forwarder) Forward(ctx context.Context, scope, path string, requestBody
 
 	model := extractModel(body)
 	poolHint := extractPoolHint(body)
+	nodeHint := extractNodeHint(body)
 	delete(body, "pool")
+	delete(body, "node")
 	if model != "" {
 		forcedMappings := f.store.GetForcedModelMappings()
 		if target, ok := forcedMappings[model]; ok && strings.TrimSpace(target) != "" {
@@ -1179,6 +1188,23 @@ func (f *Forwarder) Forward(ctx context.Context, scope, path string, requestBody
 			return nil, fmt.Errorf("proxy pool not found")
 		}
 	}
+	if strings.TrimSpace(nodeHint) != "" {
+		if node, ok := f.store.GetProviderNode(nodeHint); ok {
+			allowed := map[string]bool{}
+			for _, id := range node.ConnectionIDs {
+				allowed[id] = true
+			}
+			filtered := make([]store.ProviderConnection, 0, len(candidates))
+			for _, c := range candidates {
+				if allowed[c.ID] {
+					filtered = append(filtered, c)
+				}
+			}
+			candidates = filtered
+		} else {
+			return nil, fmt.Errorf("provider node not found")
+		}
+	}
 	if len(candidates) == 0 {
 		return nil, fmt.Errorf("no active provider connections")
 	}
@@ -1186,7 +1212,7 @@ func (f *Forwarder) Forward(ctx context.Context, scope, path string, requestBody
 	attempts := 0
 
 	upstreamBody := normalizeModelForUpstream(cloneRequestBody(body), providerHint)
-	if !isStreaming(body) && strings.TrimSpace(poolHint) == "" && !anyConnectionHasModelControls(candidates) {
+	if !isStreaming(body) && strings.TrimSpace(poolHint) == "" && strings.TrimSpace(nodeHint) == "" && !anyConnectionHasModelControls(candidates) {
 		if resp, err, handled := f.forwardDedup(ctx, scope, path, upstreamBody, model, providerHint); handled {
 			return resp, err
 		}

@@ -143,6 +143,15 @@ type ProxyPool struct {
 	UpdatedAt     string   `json:"updatedAt,omitempty"`
 }
 
+type ProviderNode struct {
+	ID            string   `json:"id"`
+	Name          string   `json:"name"`
+	Provider      string   `json:"provider,omitempty"`
+	ConnectionIDs []string `json:"connectionIds,omitempty"`
+	CreatedAt     string   `json:"createdAt,omitempty"`
+	UpdatedAt     string   `json:"updatedAt,omitempty"`
+}
+
 type DailySummary struct {
 	Requests int64   `json:"requests"`
 	Cost     float64 `json:"cost"`
@@ -177,6 +186,7 @@ type DB struct {
 	RequestLogs         []RequestLog           `json:"requestLogs"`
 	AuthFiles           []AuthFile             `json:"authFiles"`
 	ProxyPools          []ProxyPool            `json:"proxyPools"`
+	ProviderNodes       []ProviderNode         `json:"providerNodes"`
 }
 
 type Store struct {
@@ -262,6 +272,9 @@ func (s *Store) load() error {
 	if db.ProxyPools == nil {
 		db.ProxyPools = []ProxyPool{}
 	}
+	if db.ProviderNodes == nil {
+		db.ProviderNodes = []ProviderNode{}
+	}
 	s.db = db
 	s.rawRoot = root
 	s.loadedAt = time.Now()
@@ -285,12 +298,13 @@ func defaultDB() DB {
 			MaxRetries:                 0,
 			MaxCooldownSeconds:         90,
 		},
-		ModelAliases: map[string]string{},
-		Pricing:      map[string]interface{}{},
-		UsageData:    UsageData{History: []UsageEntry{}, TotalRequestsLifetime: 0, DailySummary: map[string]DailySummary{}},
-		RequestLogs:  []RequestLog{},
-		AuthFiles:    []AuthFile{},
-		ProxyPools:   []ProxyPool{},
+		ModelAliases:  map[string]string{},
+		Pricing:       map[string]interface{}{},
+		UsageData:     UsageData{History: []UsageEntry{}, TotalRequestsLifetime: 0, DailySummary: map[string]DailySummary{}},
+		RequestLogs:   []RequestLog{},
+		AuthFiles:     []AuthFile{},
+		ProxyPools:    []ProxyPool{},
+		ProviderNodes: []ProviderNode{},
 	}
 }
 
@@ -387,6 +401,9 @@ func (s *Store) persistLocked() error {
 		return err
 	}
 	if s.rawRoot["proxyPools"], err = mustJSON(s.db.ProxyPools); err != nil {
+		return err
+	}
+	if s.rawRoot["providerNodes"], err = mustJSON(s.db.ProviderNodes); err != nil {
 		return err
 	}
 	payload, err := json.MarshalIndent(s.rawRoot, "", "  ")
@@ -988,6 +1005,91 @@ func (s *Store) DeleteProxyPool(id string) error {
 		return fmt.Errorf("proxy pool not found")
 	}
 	s.db.ProxyPools = next
+	return s.persistLocked()
+}
+
+func (s *Store) ListProviderNodes() []ProviderNode {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]ProviderNode, len(s.db.ProviderNodes))
+	copy(out, s.db.ProviderNodes)
+	sort.SliceStable(out, func(i, j int) bool { return out[i].CreatedAt > out[j].CreatedAt })
+	return out
+}
+
+func (s *Store) GetProviderNode(id string) (ProviderNode, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, item := range s.db.ProviderNodes {
+		if item.ID == id {
+			return item, true
+		}
+	}
+	return ProviderNode{}, false
+}
+
+func (s *Store) CreateProviderNode(item ProviderNode) (ProviderNode, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := time.Now().UTC().Format(time.RFC3339)
+	item.ID = randID("node_")
+	item.Name = strings.TrimSpace(item.Name)
+	item.Provider = strings.TrimSpace(item.Provider)
+	item.ConnectionIDs = sanitizeConnectionIDs(item.ConnectionIDs)
+	item.CreatedAt = now
+	item.UpdatedAt = now
+	s.db.ProviderNodes = append(s.db.ProviderNodes, item)
+	return item, s.persistLocked()
+}
+
+func (s *Store) UpdateProviderNode(id string, patch map[string]interface{}) (ProviderNode, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	idx := -1
+	for i, item := range s.db.ProviderNodes {
+		if item.ID == id {
+			idx = i
+			break
+		}
+	}
+	if idx < 0 {
+		return ProviderNode{}, fmt.Errorf("provider node not found")
+	}
+	raw, _ := json.Marshal(s.db.ProviderNodes[idx])
+	merged := map[string]interface{}{}
+	_ = json.Unmarshal(raw, &merged)
+	for k, v := range patch {
+		merged[k] = v
+	}
+	merged["updatedAt"] = time.Now().UTC().Format(time.RFC3339)
+	nextRaw, _ := json.Marshal(merged)
+	var next ProviderNode
+	if err := json.Unmarshal(nextRaw, &next); err != nil {
+		return ProviderNode{}, err
+	}
+	next.Name = strings.TrimSpace(next.Name)
+	next.Provider = strings.TrimSpace(next.Provider)
+	next.ConnectionIDs = sanitizeConnectionIDs(next.ConnectionIDs)
+	s.db.ProviderNodes[idx] = next
+	return next, s.persistLocked()
+}
+
+func (s *Store) DeleteProviderNode(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	next := s.db.ProviderNodes[:0]
+	found := false
+	for _, item := range s.db.ProviderNodes {
+		if item.ID == id {
+			found = true
+			continue
+		}
+		next = append(next, item)
+	}
+	if !found {
+		return fmt.Errorf("provider node not found")
+	}
+	s.db.ProviderNodes = next
 	return s.persistLocked()
 }
 
