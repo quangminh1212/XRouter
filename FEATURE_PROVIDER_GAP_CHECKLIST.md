@@ -97,7 +97,7 @@ Reference repos:
 - [x] OAuth excluded models / model alias controls
 - [x] Auth file upload/download/index flows
 - [x] Vertex credential import flow
-- [ ] Proxy pools / upstream pool manager
+- [x] Proxy pools / upstream pool manager
 - [ ] Provider nodes / compatible node manager
 
 ### 4) Authentication/provider onboarding
