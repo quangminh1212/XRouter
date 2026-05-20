@@ -145,6 +145,7 @@ func TestProviderCatalogIncludesTTSProviders(t *testing.T) {
 		"openai-tts": "https://api.openai.com/v1",
 		"elevenlabs": "https://api.elevenlabs.io/v1/text-to-speech",
 		"cartesia":   "https://api.cartesia.ai/tts/bytes",
+		"aws-polly":  "https://polly.{region}.amazonaws.com/v1/speech",
 	}
 	seen := map[string]string{}
 	for _, provider := range payload.Providers {

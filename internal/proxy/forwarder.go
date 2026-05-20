@@ -3,7 +3,10 @@ package proxy
 import (
 	"bytes"
 	"context"
+	"crypto/hmac"
 	"crypto/sha1"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -248,6 +251,13 @@ func resolveBaseURL(c store.ProviderConnection, baseURL string) string {
 	baseURL = strings.TrimRight(strings.TrimSpace(baseURL), "/")
 	if !strings.Contains(baseURL, "{") {
 		return baseURL
+	}
+	if strings.Contains(baseURL, "{region}") {
+		region := providerDataString(c, "region")
+		if region == "" {
+			region = "us-east-1"
+		}
+		baseURL = strings.ReplaceAll(baseURL, "{region}", region)
 	}
 	if c.ProviderSpecificData == nil {
 		return baseURL
@@ -1767,6 +1777,32 @@ func transformMediaRequest(c store.ProviderConnection, apiType, endpoint string,
 			},
 		})
 		return endpoint, next, "application/json", nil
+	case "aws-polly":
+		engine := payloadString(payload, "model")
+		if strings.Contains(engine, "/") {
+			engine = strings.TrimSpace(strings.SplitN(engine, "/", 2)[1])
+		}
+		if engine == "" {
+			engine = "neural"
+		}
+		voiceID := payloadString(payload, "voice")
+		if voiceID == "" || isOpenAIVoice(voiceID) {
+			voiceID = providerDataString(c, "voiceId")
+		}
+		if voiceID == "" {
+			voiceID = "Joanna"
+		}
+		outputFormat := providerDataString(c, "outputFormat")
+		if outputFormat == "" {
+			outputFormat = "mp3"
+		}
+		next, _ := json.Marshal(map[string]interface{}{
+			"Engine":       engine,
+			"OutputFormat": outputFormat,
+			"Text":         payloadString(payload, "input"),
+			"VoiceId":      voiceID,
+		})
+		return endpoint, next, "application/json", nil
 	case "black-forest-labs":
 		modelID := payloadString(payload, "model")
 		if strings.Contains(modelID, "/") {
@@ -1839,6 +1875,15 @@ func payloadString(payload map[string]interface{}, key string) string {
 	return strings.TrimSpace(fmt.Sprint(value))
 }
 
+func isOpenAIVoice(voice string) bool {
+	switch strings.ToLower(strings.TrimSpace(voice)) {
+	case "alloy", "ash", "ballad", "coral", "echo", "fable", "nova", "onyx", "sage", "shimmer", "verse":
+		return true
+	default:
+		return false
+	}
+}
+
 func applyMediaProviderHeaders(req *http.Request, c store.ProviderConnection, apiType string) {
 	if apiType != "tts" && apiType != "image" {
 		return
@@ -1855,6 +1900,8 @@ func applyMediaProviderHeaders(req *http.Request, c store.ProviderConnection, ap
 			req.Header.Del("Authorization")
 		}
 		req.Header.Set("Cartesia-Version", "2024-06-10")
+	case "aws-polly":
+		signAWSPollyRequest(req, c)
 	case "black-forest-labs":
 		if c.APIKey != "" {
 			req.Header.Set("x-key", c.APIKey)
@@ -1863,15 +1910,89 @@ func applyMediaProviderHeaders(req *http.Request, c store.ProviderConnection, ap
 	}
 }
 
+func signAWSPollyRequest(req *http.Request, c store.ProviderConnection) {
+	accessKeyID := providerDataString(c, "accessKeyId")
+	secretAccessKey := strings.TrimSpace(c.APIKey)
+	if accessKeyID == "" || secretAccessKey == "" {
+		return
+	}
+	region := providerDataString(c, "region")
+	if region == "" {
+		region = "us-east-1"
+	}
+	now := time.Now().UTC()
+	amzDate := now.Format("20060102T150405Z")
+	dateStamp := now.Format("20060102")
+	body, _ := io.ReadAll(req.Body)
+	_ = req.Body.Close()
+	req.Body = io.NopCloser(bytes.NewReader(body))
+	bodyHash := sha256Hex(body)
+	req.Header.Set("Host", req.URL.Host)
+	req.Header.Set("X-Amz-Date", amzDate)
+	req.Header.Set("X-Amz-Content-Sha256", bodyHash)
+	if sessionToken := providerDataString(c, "sessionToken"); sessionToken != "" {
+		req.Header.Set("X-Amz-Security-Token", sessionToken)
+	}
+	req.Header.Del("Authorization")
+	signedHeaders := []string{"content-type", "host", "x-amz-content-sha256", "x-amz-date"}
+	if req.Header.Get("X-Amz-Security-Token") != "" {
+		signedHeaders = append(signedHeaders, "x-amz-security-token")
+	}
+	sort.Strings(signedHeaders)
+	canonicalHeaders := ""
+	for _, header := range signedHeaders {
+		value := req.Header.Get(header)
+		if header == "host" {
+			value = req.URL.Host
+		}
+		canonicalHeaders += header + ":" + strings.TrimSpace(value) + "\n"
+	}
+	canonicalRequest := strings.Join([]string{
+		req.Method,
+		req.URL.EscapedPath(),
+		req.URL.RawQuery,
+		canonicalHeaders,
+		strings.Join(signedHeaders, ";"),
+		bodyHash,
+	}, "\n")
+	scope := dateStamp + "/" + region + "/polly/aws4_request"
+	stringToSign := strings.Join([]string{
+		"AWS4-HMAC-SHA256",
+		amzDate,
+		scope,
+		sha256Hex([]byte(canonicalRequest)),
+	}, "\n")
+	signature := hex.EncodeToString(hmacSHA256(awsSigningKey(secretAccessKey, dateStamp, region, "polly"), []byte(stringToSign)))
+	req.Header.Set("Authorization", "AWS4-HMAC-SHA256 Credential="+accessKeyID+"/"+scope+", SignedHeaders="+strings.Join(signedHeaders, ";")+", Signature="+signature)
+}
+
+func sha256Hex(data []byte) string {
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:])
+}
+
+func hmacSHA256(key, data []byte) []byte {
+	mac := hmac.New(sha256.New, key)
+	_, _ = mac.Write(data)
+	return mac.Sum(nil)
+}
+
+func awsSigningKey(secret, dateStamp, region, service string) []byte {
+	kDate := hmacSHA256([]byte("AWS4"+secret), []byte(dateStamp))
+	kRegion := hmacSHA256(kDate, []byte(region))
+	kService := hmacSHA256(kRegion, []byte(service))
+	return hmacSHA256(kService, []byte("aws4_request"))
+}
+
 func resolveMediaEndpoint(c store.ProviderConnection, path, apiType string) (string, string, error) {
 	entry, ok := store.GetProviderCatalogEntry(c.Provider)
 	if !ok {
 		return "", "", fmt.Errorf("provider %s missing baseUrl", c.Provider)
 	}
-	baseURL := strings.TrimRight(entry.BaseURL, "/")
+	baseURL := resolveBaseURL(c, entry.BaseURL)
 	if c.ProviderSpecificData != nil {
 		if v, ok := c.ProviderSpecificData["baseUrl"].(string); ok && strings.TrimSpace(v) != "" {
-			baseURL = strings.TrimRight(strings.TrimSpace(v), "/")
+			baseURL = resolveBaseURL(c, v)
 		}
 	}
 	switch apiType {
@@ -1889,6 +2010,9 @@ func resolveMediaEndpoint(c store.ProviderConnection, path, apiType string) (str
 	case "music":
 		return joinOpenAIEndpoint(baseURL, "/v1/audio/generations"), "openai", nil
 	case "tts":
+		if c.Provider == "aws-polly" {
+			return baseURL, "aws-polly", nil
+		}
 		if c.Provider == "elevenlabs" {
 			return baseURL, "elevenlabs", nil
 		}

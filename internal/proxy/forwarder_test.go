@@ -1,7 +1,9 @@
 package proxy
 
 import (
+	"bytes"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -184,15 +186,38 @@ func TestResolveMediaEndpointTTSProviders(t *testing.T) {
 		"openai-tts": "https://api.openai.com/v1/audio/speech",
 		"elevenlabs": "https://api.elevenlabs.io/v1/text-to-speech",
 		"cartesia":   "https://api.cartesia.ai/tts/bytes",
+		"aws-polly":  "https://polly.us-east-1.amazonaws.com/v1/speech",
 	}
 	for provider, want := range tests {
-		got, _, err := resolveMediaEndpoint(store.ProviderConnection{Provider: provider}, "/v1/audio/speech", "tts")
+		got, _, err := resolveMediaEndpoint(store.ProviderConnection{Provider: provider, ProviderSpecificData: map[string]interface{}{"region": "us-east-1"}}, "/v1/audio/speech", "tts")
 		if err != nil {
 			t.Fatalf("%s endpoint failed: %v", provider, err)
 		}
 		if got != want {
 			t.Fatalf("%s expected %s, got %s", provider, want, got)
 		}
+	}
+}
+
+func TestSignAWSPollyRequestSetsAuthorization(t *testing.T) {
+	req, err := http.NewRequest(http.MethodPost, "https://polly.us-east-1.amazonaws.com/v1/speech", bytes.NewReader([]byte(`{"Text":"hello"}`)))
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	signAWSPollyRequest(req, store.ProviderConnection{
+		Provider: "aws-polly",
+		APIKey:   "secret-access-key",
+		ProviderSpecificData: map[string]interface{}{
+			"accessKeyId": "AKIAEXAMPLE",
+			"region":      "us-east-1",
+		},
+	})
+	if got := req.Header.Get("Authorization"); !strings.HasPrefix(got, "AWS4-HMAC-SHA256 Credential=AKIAEXAMPLE/") {
+		t.Fatalf("expected sigv4 auth header, got %q", got)
+	}
+	if req.Header.Get("X-Amz-Date") == "" || req.Header.Get("X-Amz-Content-Sha256") == "" {
+		t.Fatalf("expected aws sigv4 headers")
 	}
 }
 
