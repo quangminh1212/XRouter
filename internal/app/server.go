@@ -134,6 +134,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/v1/search", s.handleSearch)
 	s.mux.HandleFunc("/v1/web/fetch", s.handleWebFetch)
 	s.mux.HandleFunc("/v1/embeddings", s.handleMediaProxy)
+	s.mux.HandleFunc("/v1/images/generations", s.handleMediaProxy)
 	s.mux.HandleFunc("/v1/audio/voices", s.handleAudioVoices)
 	s.mux.HandleFunc("/v1/audio/speech", s.handleMediaProxy)
 	s.mux.HandleFunc("/v1/audio/transcriptions", s.handleMediaProxy)
