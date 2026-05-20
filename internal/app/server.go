@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"runtime"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -89,6 +90,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/management/model-mappings", s.handleManagementModelMappings)
 	s.mux.HandleFunc("/api/quota", s.handleQuota)
 	s.mux.HandleFunc("/api/usage/summary", s.handleQuota)
+	s.mux.HandleFunc("/api/usage/logs", s.handleUsageLogs)
 	s.mux.HandleFunc("/api/debug/db", s.handleDebugDB)
 	s.mux.HandleFunc("/api/monitoring/health", s.handleMonitoringHealth)
 	s.mux.HandleFunc("/v1/chat/completions", s.handleProxy)
@@ -1177,6 +1179,24 @@ func (s *Server) handleQuota(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, s.store.GetUsageSummary())
 }
 
+func (s *Server) handleUsageLogs(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	limit := 100
+	if raw := strings.TrimSpace(r.URL.Query().Get("limit")); raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
+			limit = parsed
+		}
+	}
+	logs := s.store.GetRequestLogs(limit)
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"items": logs,
+		"count": len(logs),
+	})
+}
+
 func (s *Server) handleDebugDB(w http.ResponseWriter, r *http.Request) {
 	data, err := s.store.DBSnapshot()
 	if err != nil {
@@ -1188,6 +1208,7 @@ func (s *Server) handleDebugDB(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleProxy(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
 	if r.Method != http.MethodPost {
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
 		return
@@ -1208,6 +1229,14 @@ func (s *Server) handleProxy(w http.ResponseWriter, r *http.Request) {
 	}
 	resp, err := s.forwarder.Forward(r.Context(), apiKey.ID, r.URL.Path, body)
 	if err != nil {
+		_ = s.store.RecordRequestLog(store.RequestLog{
+			Path:         r.URL.Path,
+			APIKeyID:     apiKey.ID,
+			StatusCode:   http.StatusBadGateway,
+			LatencyMs:    time.Since(start).Milliseconds(),
+			RequestBytes: len(body),
+			Error:        err.Error(),
+		})
 		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
 		return
 	}
@@ -1254,12 +1283,23 @@ func (s *Server) handleProxy(w http.ResponseWriter, r *http.Request) {
 
 	provider := strings.TrimSpace(resp.Header.Get("X-XRouter-Provider"))
 	model := strings.TrimSpace(resp.Header.Get("X-XRouter-Model"))
+	_ = s.store.RecordRequestLog(store.RequestLog{
+		Path:          r.URL.Path,
+		Provider:      provider,
+		Model:         model,
+		APIKeyID:      apiKey.ID,
+		StatusCode:    resp.StatusCode,
+		LatencyMs:     time.Since(start).Milliseconds(),
+		RequestBytes:  len(body),
+		ResponseBytes: len(rawResp),
+	})
 	if usageEntry, ok := extractUsageEntry(rawResp, provider, model); ok {
 		_ = s.store.RecordUsage(usageEntry)
 	}
 }
 
 func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
 	if r.Method != http.MethodPost {
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
 		return
@@ -1280,14 +1320,28 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := s.forwarder.Search(r.Context(), body)
 	if err != nil {
+		_ = s.store.RecordRequestLog(store.RequestLog{
+			Path:       r.URL.Path,
+			APIKeyID:   apiKey.ID,
+			StatusCode: http.StatusBadGateway,
+			LatencyMs:  time.Since(start).Milliseconds(),
+			Error:      err.Error(),
+		})
 		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
 		return
 	}
-	_ = apiKey
+	_ = s.store.RecordRequestLog(store.RequestLog{
+		Path:       r.URL.Path,
+		Provider:   result.Provider,
+		APIKeyID:   apiKey.ID,
+		StatusCode: http.StatusOK,
+		LatencyMs:  time.Since(start).Milliseconds(),
+	})
 	writeJSON(w, http.StatusOK, result)
 }
 
 func (s *Server) handleMediaProxy(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
 	if r.Method != http.MethodPost {
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
 		return
@@ -1334,6 +1388,14 @@ func (s *Server) handleMediaProxy(w http.ResponseWriter, r *http.Request) {
 		Headers:  r.Header.Clone(),
 	})
 	if err != nil {
+		_ = s.store.RecordRequestLog(store.RequestLog{
+			Path:         r.URL.Path,
+			APIKeyID:     apiKey.ID,
+			StatusCode:   http.StatusBadGateway,
+			LatencyMs:    time.Since(start).Milliseconds(),
+			RequestBytes: len(body),
+			Error:        err.Error(),
+		})
 		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
 		return
 	}
@@ -1353,7 +1415,15 @@ func (s *Server) handleMediaProxy(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(resp.StatusCode)
 	_, _ = w.Write(rawResp)
-	_ = apiKey
+	_ = s.store.RecordRequestLog(store.RequestLog{
+		Path:          r.URL.Path,
+		Provider:      strings.TrimSpace(resp.Header.Get("X-XRouter-Provider")),
+		APIKeyID:      apiKey.ID,
+		StatusCode:    resp.StatusCode,
+		LatencyMs:     time.Since(start).Milliseconds(),
+		RequestBytes:  len(body),
+		ResponseBytes: len(rawResp),
+	})
 }
 
 func asInt64(v interface{}) (int64, bool) {

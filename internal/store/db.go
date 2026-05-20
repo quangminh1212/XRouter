@@ -108,6 +108,20 @@ type UsageData struct {
 	DailySummary          map[string]DailySummary `json:"dailySummary"`
 }
 
+type RequestLog struct {
+	ID            string `json:"id"`
+	Timestamp     string `json:"timestamp,omitempty"`
+	Path          string `json:"path,omitempty"`
+	Provider      string `json:"provider,omitempty"`
+	Model         string `json:"model,omitempty"`
+	APIKeyID      string `json:"apiKeyId,omitempty"`
+	StatusCode    int    `json:"statusCode,omitempty"`
+	LatencyMs     int64  `json:"latencyMs,omitempty"`
+	RequestBytes  int    `json:"requestBytes,omitempty"`
+	ResponseBytes int    `json:"responseBytes,omitempty"`
+	Error         string `json:"error,omitempty"`
+}
+
 type DailySummary struct {
 	Requests int64   `json:"requests"`
 	Cost     float64 `json:"cost"`
@@ -135,6 +149,7 @@ type DB struct {
 	ModelAliases        map[string]string      `json:"modelAliases"`
 	Pricing             map[string]interface{} `json:"pricing"`
 	UsageData           UsageData              `json:"usageData"`
+	RequestLogs         []RequestLog           `json:"requestLogs"`
 }
 
 type Store struct {
@@ -205,6 +220,9 @@ func (s *Store) load() error {
 	if db.Settings.ForcedModelMappings == nil {
 		db.Settings.ForcedModelMappings = map[string]string{}
 	}
+	if db.RequestLogs == nil {
+		db.RequestLogs = []RequestLog{}
+	}
 	s.db = db
 	s.rawRoot = root
 	s.loadedAt = time.Now()
@@ -227,6 +245,7 @@ func defaultDB() DB {
 		ModelAliases: map[string]string{},
 		Pricing:      map[string]interface{}{},
 		UsageData:    UsageData{History: []UsageEntry{}, TotalRequestsLifetime: 0, DailySummary: map[string]DailySummary{}},
+		RequestLogs:  []RequestLog{},
 	}
 }
 
@@ -314,6 +333,9 @@ func (s *Store) persistLocked() error {
 		return err
 	}
 	if s.rawRoot["usageData"], err = mustJSON(s.db.UsageData); err != nil {
+		return err
+	}
+	if s.rawRoot["requestLogs"], err = mustJSON(s.db.RequestLogs); err != nil {
 		return err
 	}
 	payload, err := json.MarshalIndent(s.rawRoot, "", "  ")
@@ -879,6 +901,40 @@ func (s *Store) RecordUsage(entry UsageEntry) error {
 	daily.Cost += entry.TotalCost
 	s.db.UsageData.DailySummary[day] = daily
 	return s.persistLocked()
+}
+
+func (s *Store) RecordRequestLog(entry RequestLog) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := time.Now().UTC()
+	if strings.TrimSpace(entry.ID) == "" {
+		entry.ID = randID("rlog_")
+	}
+	if strings.TrimSpace(entry.Timestamp) == "" {
+		entry.Timestamp = now.Format(time.RFC3339)
+	}
+	s.db.RequestLogs = append(s.db.RequestLogs, entry)
+	limit := s.db.Settings.ObservabilityMaxRecords
+	if limit <= 0 {
+		limit = 1000
+	}
+	if len(s.db.RequestLogs) > limit {
+		s.db.RequestLogs = s.db.RequestLogs[len(s.db.RequestLogs)-limit:]
+	}
+	return s.persistLocked()
+}
+
+func (s *Store) GetRequestLogs(limit int) []RequestLog {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if limit <= 0 || limit > len(s.db.RequestLogs) {
+		limit = len(s.db.RequestLogs)
+	}
+	out := make([]RequestLog, 0, limit)
+	for i := len(s.db.RequestLogs) - 1; i >= 0 && len(out) < limit; i-- {
+		out = append(out, s.db.RequestLogs[i])
+	}
+	return out
 }
 
 func pricingNumber(node map[string]interface{}, keys ...string) (float64, bool) {
