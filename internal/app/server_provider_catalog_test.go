@@ -126,6 +126,39 @@ func TestProviderCatalogIncludesSearchAliases(t *testing.T) {
 	}
 }
 
+func TestProviderCatalogIncludesTTSProviders(t *testing.T) {
+	srv := newTestServer(t)
+	req := httptest.NewRequest(http.MethodGet, "/api/providers/catalog?apiType=tts&authType=apikey", nil)
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	var payload struct {
+		Providers []store.ProviderCatalogEntry `json:"providers"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	expected := map[string]string{
+		"openai-tts": "https://api.openai.com/v1",
+		"elevenlabs": "https://api.elevenlabs.io/v1/text-to-speech",
+		"cartesia":   "https://api.cartesia.ai/tts/bytes",
+	}
+	seen := map[string]string{}
+	for _, provider := range payload.Providers {
+		if provider.APIType != "tts" || provider.AuthType != "apikey" {
+			t.Fatalf("unexpected filtered provider: %#v", provider)
+		}
+		seen[provider.Provider] = provider.BaseURL
+	}
+	for name, baseURL := range expected {
+		if got := seen[name]; got != baseURL {
+			t.Fatalf("expected %s baseUrl %s, got %q", name, baseURL, got)
+		}
+	}
+}
+
 func TestProviderCatalogIncludesWebCookieProviders(t *testing.T) {
 	srv := newTestServer(t)
 	req := httptest.NewRequest(http.MethodGet, "/api/providers/catalog?authType=web_cookie", nil)

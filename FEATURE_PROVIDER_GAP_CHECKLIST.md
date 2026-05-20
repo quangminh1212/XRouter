@@ -12,7 +12,7 @@ Reference repos:
 - XRouter scope has expanded strongly and now includes OAuth/web-cookie onboarding, media/search endpoints, dashboard, MCP/A2A/tunnel, usage streams, and management APIs.
 - XRouter built-in provider catalog currently includes **65** providers (`internal/store/db.go`), with broad OpenAI-compatible/OAuth/web-cookie/search/audio coverage.
 - Full parity is still **not 100%** versus the 3 reference repos. Based on latest heads (`OmniRoute@39526b2`, `9router@9dde485`, `CLIProxyAPI@a726e37`), key provider/service gaps remain.
-- Current high-confidence provider gaps (vs OmniRoute + 9router provider assets): `assemblyai`, `aws-polly`, `black-forest-labs`, `cartesia`, `clarifai`, `elevenlabs`.
+- Current high-confidence provider gaps (vs OmniRoute + 9router provider assets): `assemblyai`, `aws-polly`, `black-forest-labs`, `clarifai`.
 
 ## Current XRouter Coverage
 
@@ -397,7 +397,7 @@ Legend:
 | `byteplus` | 9router | freeTier | NO | Need adapter/auth/base URL/model transform |
 | `bytez` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `cablyai` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
-| `cartesia` | 9router, OmniRoute | apiKey, audio_only | NO | Need adapter/auth/base URL/model transform |
+| `cartesia` | 9router, OmniRoute | apiKey, audio_only | YES | Added TTS catalog + native endpoint/body/header transform |
 | `cerebras` | 9router, OmniRoute | apiKey, apikey | NO | Need adapter/auth/base URL/model transform |
 | `chatgpt-web` | OmniRoute | web_cookie | YES | Added web-cookie catalog metadata + cookie-import default hydration |
 | `chutes` | 9router, OmniRoute | apiKey, apikey | YES | Added Wave 3 OpenAI-compatible catalog + fallback model |
@@ -428,7 +428,7 @@ Legend:
 | `devin-cli` | OmniRoute | oauth | NO | Need adapter/auth/base URL/model transform |
 | `docker-model-runner` | OmniRoute | local | NO | Need adapter/auth/base URL/model transform |
 | `edge-tts` | 9router | apiKey | NO | Need adapter/auth/base URL/model transform |
-| `elevenlabs` | 9router, OmniRoute | apiKey, audio_only | NO | Need adapter/auth/base URL/model transform |
+| `elevenlabs` | 9router, OmniRoute | apiKey, audio_only | YES | Added TTS catalog + native endpoint/body/header transform |
 | `empower` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `enally` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `exa` | 9router | apiKey | NO | Need adapter/auth/base URL/model transform |

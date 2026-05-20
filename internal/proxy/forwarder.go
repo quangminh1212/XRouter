@@ -1498,7 +1498,13 @@ func (f *Forwarder) forwardMediaWithConnection(ctx context.Context, c store.Prov
 	if err != nil {
 		return nil, err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(request.Body))
+	body := request.Body
+	contentType := request.Headers.Get("Content-Type")
+	endpoint, body, contentType, err = transformMediaRequest(c, apiType, endpoint, body, contentType)
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
 	if err != nil {
 		return nil, err
 	}
@@ -1510,10 +1516,14 @@ func (f *Forwarder) forwardMediaWithConnection(ctx context.Context, c store.Prov
 			req.Header.Add(k, value)
 		}
 	}
+	if strings.TrimSpace(contentType) != "" {
+		req.Header.Set("Content-Type", contentType)
+	}
 	if req.Header.Get("Content-Type") == "" {
 		req.Header.Set("Content-Type", "application/json")
 	}
 	setAuthHeader(req, c, mode)
+	applyMediaProviderHeaders(req, c, apiType)
 	resp, err := f.client.Do(req)
 	if err != nil {
 		return nil, err
@@ -1539,6 +1549,87 @@ func (f *Forwarder) forwardMediaWithConnection(ctx context.Context, c store.Prov
 	return resp, nil
 }
 
+func transformMediaRequest(c store.ProviderConnection, apiType, endpoint string, body []byte, contentType string) (string, []byte, string, error) {
+	if apiType != "tts" {
+		return endpoint, body, contentType, nil
+	}
+	var payload map[string]interface{}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return endpoint, body, contentType, nil
+	}
+	switch c.Provider {
+	case "elevenlabs":
+		voiceID := payloadString(payload, "voice")
+		if voiceID == "" {
+			voiceID = providerDataString(c, "voiceId")
+		}
+		if voiceID == "" {
+			voiceID = "alloy"
+		}
+		modelID := payloadString(payload, "model")
+		if strings.Contains(modelID, "/") {
+			modelID = strings.TrimSpace(strings.SplitN(modelID, "/", 2)[1])
+		}
+		text := payloadString(payload, "input")
+		next, _ := json.Marshal(map[string]interface{}{
+			"text":     text,
+			"model_id": modelID,
+		})
+		return strings.TrimRight(endpoint, "/") + "/" + url.PathEscape(voiceID), next, "application/json", nil
+	case "cartesia":
+		voiceID := payloadString(payload, "voice")
+		if voiceID == "" {
+			voiceID = providerDataString(c, "voiceId")
+		}
+		if voiceID == "" {
+			voiceID = "alloy"
+		}
+		modelID := payloadString(payload, "model")
+		if strings.Contains(modelID, "/") {
+			modelID = strings.TrimSpace(strings.SplitN(modelID, "/", 2)[1])
+		}
+		text := payloadString(payload, "input")
+		next, _ := json.Marshal(map[string]interface{}{
+			"model_id":   modelID,
+			"transcript": text,
+			"voice": map[string]interface{}{
+				"mode": "id",
+				"id":   voiceID,
+			},
+		})
+		return endpoint, next, "application/json", nil
+	default:
+		return endpoint, body, contentType, nil
+	}
+}
+
+func payloadString(payload map[string]interface{}, key string) string {
+	value, ok := payload[key]
+	if !ok || value == nil {
+		return ""
+	}
+	return strings.TrimSpace(fmt.Sprint(value))
+}
+
+func applyMediaProviderHeaders(req *http.Request, c store.ProviderConnection, apiType string) {
+	if apiType != "tts" {
+		return
+	}
+	switch c.Provider {
+	case "elevenlabs":
+		if c.APIKey != "" {
+			req.Header.Set("xi-api-key", c.APIKey)
+			req.Header.Del("Authorization")
+		}
+	case "cartesia":
+		if c.APIKey != "" {
+			req.Header.Set("X-API-Key", c.APIKey)
+			req.Header.Del("Authorization")
+		}
+		req.Header.Set("Cartesia-Version", "2024-06-10")
+	}
+}
+
 func resolveMediaEndpoint(c store.ProviderConnection, path, apiType string) (string, string, error) {
 	entry, ok := store.GetProviderCatalogEntry(c.Provider)
 	if !ok {
@@ -1562,6 +1653,12 @@ func resolveMediaEndpoint(c store.ProviderConnection, path, apiType string) (str
 	case "music":
 		return joinOpenAIEndpoint(baseURL, "/v1/audio/generations"), "openai", nil
 	case "tts":
+		if c.Provider == "elevenlabs" {
+			return baseURL, "elevenlabs", nil
+		}
+		if c.Provider == "cartesia" {
+			return baseURL, "cartesia", nil
+		}
 		return joinOpenAIEndpoint(baseURL, "/v1/audio/speech"), "openai", nil
 	case "stt":
 		if c.Provider == "deepgram" {

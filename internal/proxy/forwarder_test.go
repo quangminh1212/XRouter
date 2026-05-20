@@ -168,6 +168,23 @@ func TestResolveMediaEndpointEmbeddings(t *testing.T) {
 	}
 }
 
+func TestResolveMediaEndpointTTSProviders(t *testing.T) {
+	tests := map[string]string{
+		"openai-tts": "https://api.openai.com/v1/audio/speech",
+		"elevenlabs": "https://api.elevenlabs.io/v1/text-to-speech",
+		"cartesia":   "https://api.cartesia.ai/tts/bytes",
+	}
+	for provider, want := range tests {
+		got, _, err := resolveMediaEndpoint(store.ProviderConnection{Provider: provider}, "/v1/audio/speech", "tts")
+		if err != nil {
+			t.Fatalf("%s endpoint failed: %v", provider, err)
+		}
+		if got != want {
+			t.Fatalf("%s expected %s, got %s", provider, want, got)
+		}
+	}
+}
+
 func TestShouldRefreshOAuthToken(t *testing.T) {
 	now := time.Date(2026, 5, 20, 12, 0, 0, 0, time.UTC)
 	c1 := store.ProviderConnection{AuthType: "oauth", RefreshToken: "r1", TokenExpiry: now.Add(4 * time.Minute).Format(time.RFC3339)}
