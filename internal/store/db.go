@@ -184,6 +184,19 @@ type MCPServer struct {
 	UpdatedAt string            `json:"updatedAt,omitempty"`
 }
 
+type A2AAgent struct {
+	ID           string            `json:"id"`
+	Name         string            `json:"name"`
+	URL          string            `json:"url"`
+	Protocol     string            `json:"protocol,omitempty"`
+	Capabilities []string          `json:"capabilities,omitempty"`
+	Env          map[string]string `json:"env,omitempty"`
+	Headers      map[string]string `json:"headers,omitempty"`
+	Enabled      bool              `json:"enabled"`
+	CreatedAt    string            `json:"createdAt,omitempty"`
+	UpdatedAt    string            `json:"updatedAt,omitempty"`
+}
+
 type DailySummary struct {
 	Requests int64   `json:"requests"`
 	Cost     float64 `json:"cost"`
@@ -222,6 +235,7 @@ type DB struct {
 	ComboModels         []ComboModel           `json:"comboModels"`
 	RoutePolicies       []RoutePolicy          `json:"routePolicies"`
 	MCPServers          []MCPServer            `json:"mcpServers"`
+	A2AAgents           []A2AAgent             `json:"a2aAgents"`
 }
 
 type Store struct {
@@ -319,6 +333,9 @@ func (s *Store) load() error {
 	if db.MCPServers == nil {
 		db.MCPServers = []MCPServer{}
 	}
+	if db.A2AAgents == nil {
+		db.A2AAgents = []A2AAgent{}
+	}
 	s.db = db
 	s.rawRoot = root
 	s.loadedAt = time.Now()
@@ -352,6 +369,7 @@ func defaultDB() DB {
 		ComboModels:   []ComboModel{},
 		RoutePolicies: []RoutePolicy{},
 		MCPServers:    []MCPServer{},
+		A2AAgents:     []A2AAgent{},
 	}
 }
 
@@ -460,6 +478,9 @@ func (s *Store) persistLocked() error {
 		return err
 	}
 	if s.rawRoot["mcpServers"], err = mustJSON(s.db.MCPServers); err != nil {
+		return err
+	}
+	if s.rawRoot["a2aAgents"], err = mustJSON(s.db.A2AAgents); err != nil {
 		return err
 	}
 	payload, err := json.MarshalIndent(s.rawRoot, "", "  ")
@@ -1409,6 +1430,114 @@ func (s *Store) DeleteMCPServer(id string) error {
 		return fmt.Errorf("mcp server not found")
 	}
 	s.db.MCPServers = next
+	return s.persistLocked()
+}
+
+func sanitizeCapabilities(items []string) []string {
+	if len(items) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(items))
+	seen := map[string]struct{}{}
+	for _, item := range items {
+		v := strings.TrimSpace(item)
+		if v == "" {
+			continue
+		}
+		k := strings.ToLower(v)
+		if _, ok := seen[k]; ok {
+			continue
+		}
+		seen[k] = struct{}{}
+		out = append(out, v)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func (s *Store) ListA2AAgents(includeDisabled bool) []A2AAgent {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]A2AAgent, 0, len(s.db.A2AAgents))
+	for _, item := range s.db.A2AAgents {
+		if !includeDisabled && !item.Enabled {
+			continue
+		}
+		clean := item
+		clean.Env = nil
+		clean.Headers = nil
+		out = append(out, clean)
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].CreatedAt > out[j].CreatedAt })
+	return out
+}
+
+func (s *Store) CreateA2AAgent(item A2AAgent) (A2AAgent, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := time.Now().UTC().Format(time.RFC3339)
+	item.ID = randID("a2a_")
+	item.Name = strings.TrimSpace(item.Name)
+	item.URL = strings.TrimSpace(item.URL)
+	item.Protocol = strings.ToLower(strings.TrimSpace(item.Protocol))
+	item.Capabilities = sanitizeCapabilities(item.Capabilities)
+	item.CreatedAt = now
+	item.UpdatedAt = now
+	s.db.A2AAgents = append(s.db.A2AAgents, item)
+	return item, s.persistLocked()
+}
+
+func (s *Store) UpdateA2AAgent(id string, patch map[string]interface{}) (A2AAgent, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	idx := -1
+	for i, item := range s.db.A2AAgents {
+		if item.ID == id {
+			idx = i
+			break
+		}
+	}
+	if idx < 0 {
+		return A2AAgent{}, fmt.Errorf("a2a agent not found")
+	}
+	raw, _ := json.Marshal(s.db.A2AAgents[idx])
+	merged := map[string]interface{}{}
+	_ = json.Unmarshal(raw, &merged)
+	for k, v := range patch {
+		merged[k] = v
+	}
+	merged["updatedAt"] = time.Now().UTC().Format(time.RFC3339)
+	nextRaw, _ := json.Marshal(merged)
+	var next A2AAgent
+	if err := json.Unmarshal(nextRaw, &next); err != nil {
+		return A2AAgent{}, err
+	}
+	next.Name = strings.TrimSpace(next.Name)
+	next.URL = strings.TrimSpace(next.URL)
+	next.Protocol = strings.ToLower(strings.TrimSpace(next.Protocol))
+	next.Capabilities = sanitizeCapabilities(next.Capabilities)
+	s.db.A2AAgents[idx] = next
+	return next, s.persistLocked()
+}
+
+func (s *Store) DeleteA2AAgent(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	next := s.db.A2AAgents[:0]
+	found := false
+	for _, item := range s.db.A2AAgents {
+		if item.ID == id {
+			found = true
+			continue
+		}
+		next = append(next, item)
+	}
+	if !found {
+		return fmt.Errorf("a2a agent not found")
+	}
+	s.db.A2AAgents = next
 	return s.persistLocked()
 }
 

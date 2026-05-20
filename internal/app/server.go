@@ -85,6 +85,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/oauth/providers/", s.handleOAuthProviderImport)
 	s.mux.HandleFunc("/api/oauth/callback", s.handleOAuthCallback)
 	s.mux.HandleFunc("/api/mcp/servers", s.handleMCPServers)
+	s.mux.HandleFunc("/api/a2a/agents", s.handleA2AAgents)
 	s.mux.HandleFunc("/api/auth-files/", s.handleAuthFileByID)
 	s.mux.HandleFunc("/api/auth-files", s.handleAuthFiles)
 	s.mux.HandleFunc("/api/keys", s.handleAPIKeys)
@@ -106,6 +107,8 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/management/route-policies", s.handleManagementRoutePolicies)
 	s.mux.HandleFunc("/api/management/mcp-servers/", s.handleManagementMCPServerByID)
 	s.mux.HandleFunc("/api/management/mcp-servers", s.handleManagementMCPServers)
+	s.mux.HandleFunc("/api/management/a2a-agents/", s.handleManagementA2AAgentByID)
+	s.mux.HandleFunc("/api/management/a2a-agents", s.handleManagementA2AAgents)
 	s.mux.HandleFunc("/api/quota", s.handleQuota)
 	s.mux.HandleFunc("/api/usage/summary", s.handleQuota)
 	s.mux.HandleFunc("/api/usage/stats", s.handleUsageStats)
@@ -552,6 +555,14 @@ func (s *Server) handleMCPServers(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]interface{}{"servers": s.store.ListMCPServers(false)})
 }
 
+func (s *Server) handleA2AAgents(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{"agents": s.store.ListA2AAgents(false)})
+}
+
 func (s *Server) handleManagementMCPServers(w http.ResponseWriter, r *http.Request) {
 	if !isLocalOnlyRequest(r) {
 		writeJSON(w, http.StatusForbidden, map[string]string{"error": "management api is restricted to localhost"})
@@ -571,6 +582,41 @@ func (s *Server) handleManagementMCPServers(w http.ResponseWriter, r *http.Reque
 			return
 		}
 		created, err := s.store.CreateMCPServer(body)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			return
+		}
+		created.Env = nil
+		created.Headers = nil
+		writeJSON(w, http.StatusCreated, created)
+	default:
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+	}
+}
+
+func (s *Server) handleManagementA2AAgents(w http.ResponseWriter, r *http.Request) {
+	if !isLocalOnlyRequest(r) {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "management api is restricted to localhost"})
+		return
+	}
+	switch r.Method {
+	case http.MethodGet:
+		writeJSON(w, http.StatusOK, map[string]interface{}{"agents": s.store.ListA2AAgents(true)})
+	case http.MethodPost:
+		var body store.A2AAgent
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+			return
+		}
+		if strings.TrimSpace(body.Name) == "" {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "name is required"})
+			return
+		}
+		if strings.TrimSpace(body.URL) == "" {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "url is required"})
+			return
+		}
+		created, err := s.store.CreateA2AAgent(body)
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 			return
@@ -610,6 +656,42 @@ func (s *Server) handleManagementMCPServerByID(w http.ResponseWriter, r *http.Re
 		writeJSON(w, http.StatusOK, updated)
 	case http.MethodDelete:
 		if err := s.store.DeleteMCPServer(id); err != nil {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]bool{"success": true})
+	default:
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+	}
+}
+
+func (s *Server) handleManagementA2AAgentByID(w http.ResponseWriter, r *http.Request) {
+	if !isLocalOnlyRequest(r) {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "management api is restricted to localhost"})
+		return
+	}
+	id := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/management/a2a-agents/"), "/")
+	if id == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "missing a2a agent id"})
+		return
+	}
+	switch r.Method {
+	case http.MethodPatch:
+		var patch map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+			return
+		}
+		updated, err := s.store.UpdateA2AAgent(id, patch)
+		if err != nil {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
+			return
+		}
+		updated.Env = nil
+		updated.Headers = nil
+		writeJSON(w, http.StatusOK, updated)
+	case http.MethodDelete:
+		if err := s.store.DeleteA2AAgent(id); err != nil {
 			writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
 			return
 		}
