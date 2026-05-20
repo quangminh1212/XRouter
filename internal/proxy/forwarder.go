@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -24,6 +25,8 @@ type Forwarder struct {
 	proxyConfigHash string
 	dedupMu         sync.Mutex
 	dedup           map[string]*dedupEntry
+	modelsMu        sync.Mutex
+	modelsCache     map[string]modelsCacheEntry
 }
 
 type dedupEntry struct {
@@ -36,7 +39,14 @@ type dedupEntry struct {
 	err       error
 }
 
+type modelsCacheEntry struct {
+	expiresAt time.Time
+	models    []string
+	source    string
+}
+
 const dedupTTL = 5 * time.Second
+const modelsCacheTTL = 60 * time.Second
 
 func NewForwarder(st *store.Store) *Forwarder {
 	transport := http.DefaultTransport.(*http.Transport).Clone()
@@ -46,9 +56,10 @@ func NewForwarder(st *store.Store) *Forwarder {
 	transport.IdleConnTimeout = 90 * time.Second
 
 	return &Forwarder{
-		client: &http.Client{Transport: transport, Timeout: 0},
-		store:  st,
-		dedup:  map[string]*dedupEntry{},
+		client:      &http.Client{Transport: transport, Timeout: 0},
+		store:       st,
+		dedup:       map[string]*dedupEntry{},
+		modelsCache: map[string]modelsCacheEntry{},
 	}
 }
 
@@ -300,6 +311,12 @@ type ProbeResult struct {
 	LatencyMs  int64  `json:"latencyMs"`
 }
 
+type ProviderModelsResult struct {
+	Provider string   `json:"provider"`
+	Models   []string `json:"models"`
+	Source   string   `json:"source"`
+}
+
 type OAuthRefreshResult struct {
 	AccessToken  string `json:"accessToken"`
 	RefreshToken string `json:"refreshToken,omitempty"`
@@ -484,6 +501,131 @@ func normalizeResultArray(raw interface{}, titleKey, urlKey, snippetKey string) 
 		})
 	}
 	return results
+}
+
+func (f *Forwarder) GetProviderModels(ctx context.Context, c store.ProviderConnection) (ProviderModelsResult, error) {
+	cacheKey := c.ID
+	now := time.Now()
+	f.modelsMu.Lock()
+	if entry, ok := f.modelsCache[cacheKey]; ok && now.Before(entry.expiresAt) {
+		out := make([]string, len(entry.models))
+		copy(out, entry.models)
+		f.modelsMu.Unlock()
+		return ProviderModelsResult{Provider: c.Provider, Models: out, Source: entry.source}, nil
+	}
+	f.modelsMu.Unlock()
+
+	models, source, err := f.fetchProviderModels(ctx, c)
+	if err != nil {
+		return ProviderModelsResult{}, err
+	}
+	f.modelsMu.Lock()
+	f.modelsCache[cacheKey] = modelsCacheEntry{
+		expiresAt: time.Now().Add(modelsCacheTTL),
+		models:    append([]string(nil), models...),
+		source:    source,
+	}
+	f.modelsMu.Unlock()
+	return ProviderModelsResult{Provider: c.Provider, Models: models, Source: source}, nil
+}
+
+func (f *Forwarder) fetchProviderModels(ctx context.Context, c store.ProviderConnection) ([]string, string, error) {
+	if err := f.refreshTransport(); err != nil {
+		return nil, "", err
+	}
+	entry, ok := store.GetProviderCatalogEntry(c.Provider)
+	if !ok {
+		return nil, "", fmt.Errorf("unknown provider %s", c.Provider)
+	}
+	baseURL := strings.TrimRight(entry.BaseURL, "/")
+	if c.ProviderSpecificData != nil {
+		if v, ok := c.ProviderSpecificData["baseUrl"].(string); ok && strings.TrimSpace(v) != "" {
+			baseURL = strings.TrimRight(strings.TrimSpace(v), "/")
+		}
+	}
+	modelsURL := joinOpenAIEndpoint(baseURL, "/v1/models")
+	if entry.APIType == "anthropic" {
+		return fallbackProviderModels(c, entry), "fallback", nil
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, modelsURL, nil)
+	if err != nil {
+		return nil, "", err
+	}
+	req.Header.Set("Accept", "application/json")
+	setAuthHeader(req, c, entry.APIType)
+	resp, err := f.client.Do(req)
+	if err != nil {
+		return fallbackProviderModels(c, entry), "fallback", nil
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fallbackProviderModels(c, entry), "fallback", nil
+	}
+	rawBody, err := io.ReadAll(io.LimitReader(resp.Body, 4*1024*1024))
+	if err != nil {
+		return fallbackProviderModels(c, entry), "fallback", nil
+	}
+	var payload map[string]interface{}
+	if err := json.Unmarshal(rawBody, &payload); err != nil {
+		return fallbackProviderModels(c, entry), "fallback", nil
+	}
+	items, ok := payload["data"].([]interface{})
+	if !ok {
+		return fallbackProviderModels(c, entry), "fallback", nil
+	}
+	models := make([]string, 0, len(items))
+	for _, item := range items {
+		node, ok := item.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		id := strings.TrimSpace(fmt.Sprint(node["id"]))
+		if id == "" || id == "<nil>" {
+			continue
+		}
+		if !strings.Contains(id, "/") {
+			id = c.Provider + "/" + id
+		}
+		models = append(models, id)
+	}
+	if len(models) == 0 {
+		return fallbackProviderModels(c, entry), "fallback", nil
+	}
+	slices.Sort(models)
+	return dedupeStrings(models), "live", nil
+}
+
+func fallbackProviderModels(c store.ProviderConnection, entry store.ProviderCatalogEntry) []string {
+	models := make([]string, 0, len(entry.FallbackModels)+1)
+	for _, item := range entry.FallbackModels {
+		if strings.TrimSpace(item) != "" {
+			models = append(models, strings.TrimSpace(item))
+		}
+	}
+	if strings.TrimSpace(c.DefaultModel) != "" {
+		models = append(models, strings.TrimSpace(c.DefaultModel))
+	}
+	if len(models) == 0 && c.Provider != "" {
+		models = append(models, c.Provider+"/default")
+	}
+	slices.Sort(models)
+	return dedupeStrings(models)
+}
+
+func dedupeStrings(items []string) []string {
+	if len(items) == 0 {
+		return items
+	}
+	out := make([]string, 0, len(items))
+	seen := map[string]struct{}{}
+	for _, item := range items {
+		if _, ok := seen[item]; ok {
+			continue
+		}
+		seen[item] = struct{}{}
+		out = append(out, item)
+	}
+	return out
 }
 
 func (f *Forwarder) ProbeConnection(ctx context.Context, c store.ProviderConnection) (ProbeResult, error) {

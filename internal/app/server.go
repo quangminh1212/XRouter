@@ -239,6 +239,10 @@ func (s *Server) handleProviderByID(w http.ResponseWriter, r *http.Request) {
 		s.handleProviderTestModels(w, r)
 		return
 	}
+	if strings.HasSuffix(path, "/models") {
+		s.handleProviderModels(w, r)
+		return
+	}
 	if strings.HasSuffix(path, "/test") {
 		s.handleProviderTest(w, r)
 		return
@@ -271,6 +275,30 @@ func (s *Server) handleProviderByID(w http.ResponseWriter, r *http.Request) {
 	default:
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
 	}
+}
+
+func (s *Server) handleProviderModels(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	id := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/api/providers/"), "/models")
+	id = strings.TrimSuffix(id, "/")
+	if id == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "missing provider id"})
+		return
+	}
+	connection, ok := s.store.GetConnectionByIDRaw(id)
+	if !ok {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "provider connection not found"})
+		return
+	}
+	result, err := s.forwarder.GetProviderModels(r.Context(), connection)
+	if err != nil {
+		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
 }
 
 func (s *Server) handleProviderTest(w http.ResponseWriter, r *http.Request) {
