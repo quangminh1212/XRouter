@@ -125,7 +125,7 @@ Reference repos:
 - [ ] Multi-account weighted round-robin / quota-aware selection
 - [ ] Provider/account-level policy assignment
 - [x] MCP endpoints/server integration
-- [ ] A2A protocol endpoints
+- [x] A2A protocol endpoints
 - [ ] Tunnel/remote exposure features
 - [ ] CLI auto-config endpoints for external tools
 - [ ] Dashboard/web UI
@@ -184,7 +184,7 @@ Reference repos:
   - [x] Combo model system
   - [ ] Policy routing
 - [x] Add MCP support
-- [ ] Add A2A support
+- [x] Add A2A support
 - [ ] Add tunnel / remote access helpers
 
 ## Top 30 Provider Implementation Priority
