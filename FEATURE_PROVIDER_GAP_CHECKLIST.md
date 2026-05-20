@@ -122,7 +122,7 @@ Reference repos:
 - [x] Sticky/round-robin settings fields in DB
 - [x] Rich routing strategies like those advertised by OmniRoute
 - [x] Combo model system
-- [ ] Multi-account weighted round-robin / quota-aware selection
+- [x] Multi-account weighted round-robin / quota-aware selection
 - [x] Provider/account-level policy assignment
 - [x] MCP endpoints/server integration
 - [x] A2A protocol endpoints
