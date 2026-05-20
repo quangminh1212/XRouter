@@ -139,6 +139,7 @@ type Settings struct {
 	ObservabilityEnabled       bool              `json:"observabilityEnabled"`
 	ObservabilityMaxRecords    int               `json:"observabilityMaxRecords"`
 	ForcedModelMappings        map[string]string `json:"forcedModelMappings,omitempty"`
+	DisabledModels             []string          `json:"disabledModels,omitempty"`
 	DefaultRequestsPerMinute   int               `json:"defaultRequestsPerMinute,omitempty"`
 }
 
@@ -220,6 +221,9 @@ func (s *Store) load() error {
 	if db.Settings.ForcedModelMappings == nil {
 		db.Settings.ForcedModelMappings = map[string]string{}
 	}
+	if db.Settings.DisabledModels == nil {
+		db.Settings.DisabledModels = []string{}
+	}
 	if db.RequestLogs == nil {
 		db.RequestLogs = []RequestLog{}
 	}
@@ -241,6 +245,7 @@ func defaultDB() DB {
 			ObservabilityEnabled:       true,
 			ObservabilityMaxRecords:    1000,
 			ForcedModelMappings:        map[string]string{},
+			DisabledModels:             []string{},
 		},
 		ModelAliases: map[string]string{},
 		Pricing:      map[string]interface{}{},
@@ -926,6 +931,87 @@ func (s *Store) DeleteForcedModelMappingKeys(keys []string) (map[string]string, 
 		out[k] = v
 	}
 	return out, nil
+}
+
+func sanitizeModelList(input []string) []string {
+	seen := map[string]bool{}
+	out := make([]string, 0, len(input))
+	for _, item := range input {
+		model := strings.TrimSpace(item)
+		if model == "" || seen[model] {
+			continue
+		}
+		seen[model] = true
+		out = append(out, model)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func (s *Store) GetDisabledModels() []string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return sanitizeModelList(s.db.Settings.DisabledModels)
+}
+
+func (s *Store) ReplaceDisabledModels(models []string) ([]string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.db.Settings.DisabledModels = sanitizeModelList(models)
+	if err := s.persistLocked(); err != nil {
+		return nil, err
+	}
+	return append([]string(nil), s.db.Settings.DisabledModels...), nil
+}
+
+func (s *Store) PatchDisabledModels(models []string) ([]string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	merged := append([]string(nil), s.db.Settings.DisabledModels...)
+	merged = append(merged, models...)
+	s.db.Settings.DisabledModels = sanitizeModelList(merged)
+	if err := s.persistLocked(); err != nil {
+		return nil, err
+	}
+	return append([]string(nil), s.db.Settings.DisabledModels...), nil
+}
+
+func (s *Store) DeleteDisabledModels(models []string) ([]string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	remove := map[string]bool{}
+	for _, item := range models {
+		item = strings.TrimSpace(item)
+		if item != "" {
+			remove[item] = true
+		}
+	}
+	next := make([]string, 0, len(s.db.Settings.DisabledModels))
+	for _, item := range s.db.Settings.DisabledModels {
+		if !remove[item] {
+			next = append(next, item)
+		}
+	}
+	s.db.Settings.DisabledModels = sanitizeModelList(next)
+	if err := s.persistLocked(); err != nil {
+		return nil, err
+	}
+	return append([]string(nil), s.db.Settings.DisabledModels...), nil
+}
+
+func (s *Store) IsModelDisabled(model string) bool {
+	model = strings.TrimSpace(model)
+	if model == "" {
+		return false
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, item := range s.db.Settings.DisabledModels {
+		if item == model {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Store) GetUsageSummary() map[string]interface{} {

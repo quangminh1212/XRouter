@@ -89,6 +89,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/models", s.handleModels)
 	s.mux.HandleFunc("/api/management/model-mappings", s.handleManagementModelMappings)
 	s.mux.HandleFunc("/api/management/model-aliases", s.handleManagementModelAliases)
+	s.mux.HandleFunc("/api/management/disabled-models", s.handleManagementDisabledModels)
 	s.mux.HandleFunc("/api/quota", s.handleQuota)
 	s.mux.HandleFunc("/api/usage/summary", s.handleQuota)
 	s.mux.HandleFunc("/api/usage/stats", s.handleUsageStats)
@@ -919,13 +920,17 @@ func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	aliases := s.store.GetModelAliases()
+	disabled := toStringSet(s.store.GetDisabledModels())
 	modelMap := map[string]map[string]string{}
 	for model, alias := range aliases {
+		if disabled[model] {
+			continue
+		}
 		modelMap[model] = map[string]string{"fullModel": model, "alias": alias}
 	}
 	for _, model := range store.GetFallbackModels() {
 		fullModel := strings.TrimSpace(model["fullModel"])
-		if fullModel == "" {
+		if fullModel == "" || disabled[fullModel] {
 			continue
 		}
 		if _, ok := modelMap[fullModel]; !ok {
@@ -940,6 +945,17 @@ func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
 		return strings.Compare(a["fullModel"], b["fullModel"])
 	})
 	writeJSON(w, http.StatusOK, map[string]interface{}{"models": models})
+}
+
+func toStringSet(items []string) map[string]bool {
+	out := make(map[string]bool, len(items))
+	for _, item := range items {
+		item = strings.TrimSpace(item)
+		if item != "" {
+			out[item] = true
+		}
+	}
+	return out
 }
 
 func isLocalOnlyRequest(r *http.Request) bool {
@@ -1073,6 +1089,62 @@ func (s *Server) handleManagementModelAliases(w http.ResponseWriter, r *http.Req
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]interface{}{"success": true, "aliases": aliases})
+	default:
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+	}
+}
+
+func (s *Server) handleManagementDisabledModels(w http.ResponseWriter, r *http.Request) {
+	if !isLocalOnlyRequest(r) {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "management api is restricted to localhost"})
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		writeJSON(w, http.StatusOK, map[string]interface{}{"models": s.store.GetDisabledModels()})
+	case http.MethodPut:
+		var body struct {
+			Models []string `json:"models"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+			return
+		}
+		models, err := s.store.ReplaceDisabledModels(body.Models)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{"success": true, "models": models})
+	case http.MethodPatch:
+		var body struct {
+			Models []string `json:"models"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+			return
+		}
+		models, err := s.store.PatchDisabledModels(body.Models)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{"success": true, "models": models})
+	case http.MethodDelete:
+		var body struct {
+			Models []string `json:"models"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil && err != io.EOF {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+			return
+		}
+		models, err := s.store.DeleteDisabledModels(body.Models)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{"success": true, "models": models})
 	default:
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
 	}
@@ -1333,6 +1405,10 @@ func (s *Server) handleProxy(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "failed to read body"})
 		return
 	}
+	if disabledModel, ok := s.resolveDisabledModel(body); ok {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "model is disabled", "model": disabledModel})
+		return
+	}
 	resp, err := s.forwarder.Forward(r.Context(), apiKey.ID, r.URL.Path, body)
 	if err != nil {
 		_ = s.store.RecordRequestLog(store.RequestLog{
@@ -1402,6 +1478,25 @@ func (s *Server) handleProxy(w http.ResponseWriter, r *http.Request) {
 	if usageEntry, ok := extractUsageEntry(rawResp, provider, model); ok {
 		_ = s.store.RecordUsage(usageEntry)
 	}
+}
+
+func (s *Server) resolveDisabledModel(body []byte) (string, bool) {
+	var payload map[string]interface{}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return "", false
+	}
+	rawModel, _ := payload["model"].(string)
+	model := strings.TrimSpace(rawModel)
+	if model == "" {
+		return "", false
+	}
+	if target, ok := s.store.GetForcedModelMappings()[model]; ok && strings.TrimSpace(target) != "" {
+		model = strings.TrimSpace(target)
+	}
+	if s.store.IsModelDisabled(model) {
+		return model, true
+	}
+	return "", false
 }
 
 func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
