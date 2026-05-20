@@ -1204,7 +1204,7 @@ func supportsMediaAPI(provider, providerAPIType, requested string) bool {
 	if providerAPIType == requested {
 		return true
 	}
-	return provider == "openai" && providerAPIType == "openai" && (requested == "embedding" || requested == "image" || requested == "vision" || requested == "video" || requested == "music")
+	return provider == "openai" && providerAPIType == "openai" && (requested == "embedding" || requested == "image" || requested == "vision" || requested == "video" || requested == "music" || requested == "tts" || requested == "stt")
 }
 
 func (f *Forwarder) forwardMediaWithConnection(ctx context.Context, c store.ProviderConnection, request MediaRequest, apiType string) (*http.Response, error) {

@@ -156,10 +156,10 @@ Reference repos:
 
 - [ ] Add generic provider adapters for OpenAI-compatible, Anthropic-compatible, and Gemini-compatible upstreams
 - [x] Add `POST /v1/completions`
-- [ ] Add `POST /v1/embeddings`
+- [x] Add `POST /v1/embeddings`
 - [x] Add `POST /v1/images/generations`
-- [ ] Add `POST /v1/audio/speech`
-- [ ] Add `POST /v1/audio/transcriptions`
+- [x] Add `POST /v1/audio/speech`
+- [x] Add `POST /v1/audio/transcriptions`
 - [x] Add `POST /v1/search`
 - [x] Add provider validate/test/models endpoints
 - [x] Add `GET /api/providers/{id}/models`
