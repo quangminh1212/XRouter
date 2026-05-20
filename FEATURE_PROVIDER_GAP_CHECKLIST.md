@@ -67,7 +67,7 @@ Reference repos:
 - [x] Image-to-text / vision-specific media route
 - [x] Text-to-speech
 - [x] Speech-to-text
-- [ ] Video generation
+- [x] Video generation
 - [ ] Video edits/extensions/retrieve
 - [ ] Music/audio generation
 - [ ] Web search endpoint
