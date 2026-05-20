@@ -605,6 +605,30 @@ func (s *Store) GetUsageSummary() map[string]interface{} {
 	return map[string]interface{}{"totalRequests": s.db.UsageData.TotalRequestsLifetime, "totalCost": totalCost, "providers": providers, "days": s.db.UsageData.DailySummary, "historySize": len(s.db.UsageData.History)}
 }
 
+func (s *Store) RecordUsage(entry UsageEntry) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := time.Now().UTC()
+	if entry.Timestamp == "" {
+		entry.Timestamp = now.Format(time.RFC3339)
+	}
+	s.db.UsageData.TotalRequestsLifetime++
+	s.db.UsageData.History = append(s.db.UsageData.History, entry)
+	limit := s.db.Settings.ObservabilityMaxRecords
+	if limit <= 0 {
+		limit = 1000
+	}
+	if len(s.db.UsageData.History) > limit {
+		s.db.UsageData.History = s.db.UsageData.History[len(s.db.UsageData.History)-limit:]
+	}
+	day := now.Format("2006-01-02")
+	daily := s.db.UsageData.DailySummary[day]
+	daily.Requests++
+	daily.Cost += entry.TotalCost
+	s.db.UsageData.DailySummary[day] = daily
+	return s.persistLocked()
+}
+
 func (s *Store) DBSnapshot() ([]byte, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

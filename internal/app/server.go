@@ -471,26 +471,91 @@ func (s *Server) handleProxy(w http.ResponseWriter, r *http.Request) {
 	if w.Header().Get("Content-Type") == "" {
 		w.Header().Set("Content-Type", "application/json")
 	}
-	w.WriteHeader(resp.StatusCode)
-	flusher, _ := w.(http.Flusher)
-	buf := make([]byte, 16*1024)
-	for {
-		n, readErr := resp.Body.Read(buf)
-		if n > 0 {
-			if _, writeErr := w.Write(buf[:n]); writeErr != nil {
+	contentType := strings.ToLower(w.Header().Get("Content-Type"))
+	if strings.Contains(contentType, "text/event-stream") {
+		w.WriteHeader(resp.StatusCode)
+		flusher, _ := w.(http.Flusher)
+		buf := make([]byte, 16*1024)
+		for {
+			n, readErr := resp.Body.Read(buf)
+			if n > 0 {
+				if _, writeErr := w.Write(buf[:n]); writeErr != nil {
+					return
+				}
+				if flusher != nil {
+					flusher.Flush()
+				}
+			}
+			if readErr == io.EOF {
 				return
 			}
-			if flusher != nil {
-				flusher.Flush()
+			if readErr != nil {
+				return
 			}
 		}
-		if readErr == io.EOF {
-			return
-		}
-		if readErr != nil {
-			return
+	}
+
+	rawResp, readErr := io.ReadAll(io.LimitReader(resp.Body, 8*1024*1024))
+	if readErr != nil {
+		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "failed to read upstream response"})
+		return
+	}
+	w.WriteHeader(resp.StatusCode)
+	_, _ = w.Write(rawResp)
+
+	provider := strings.TrimSpace(resp.Header.Get("X-XRouter-Provider"))
+	model := strings.TrimSpace(resp.Header.Get("X-XRouter-Model"))
+	if usageEntry, ok := extractUsageEntry(rawResp, provider, model); ok {
+		_ = s.store.RecordUsage(usageEntry)
+	}
+}
+
+func asInt64(v interface{}) (int64, bool) {
+	switch n := v.(type) {
+	case float64:
+		return int64(n), true
+	case int64:
+		return n, true
+	case int:
+		return int64(n), true
+	default:
+		return 0, false
+	}
+}
+
+func extractUsageEntry(raw []byte, provider, model string) (store.UsageEntry, bool) {
+	var payload map[string]interface{}
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return store.UsageEntry{}, false
+	}
+	usageRaw, ok := payload["usage"].(map[string]interface{})
+	if !ok {
+		return store.UsageEntry{}, false
+	}
+	entry := store.UsageEntry{
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
+		Provider:  provider,
+		Model:     model,
+		TotalCost: 0,
+	}
+	if v, ok := asInt64(usageRaw["prompt_tokens"]); ok {
+		entry.PromptTokens = v
+	}
+	if v, ok := asInt64(usageRaw["input_tokens"]); ok && entry.PromptTokens == 0 {
+		entry.PromptTokens = v
+	}
+	if v, ok := asInt64(usageRaw["completion_tokens"]); ok {
+		entry.CompletionTokens = v
+	}
+	if v, ok := asInt64(usageRaw["output_tokens"]); ok && entry.CompletionTokens == 0 {
+		entry.CompletionTokens = v
+	}
+	if v, ok := asInt64(usageRaw["total_tokens"]); ok {
+		if entry.PromptTokens == 0 && entry.CompletionTokens == 0 {
+			entry.PromptTokens = v
 		}
 	}
+	return entry, true
 }
 
 func writeJSON(w http.ResponseWriter, status int, data interface{}) {

@@ -267,6 +267,11 @@ func (f *Forwarder) Forward(ctx context.Context, path string, requestBody []byte
 		if c.RateLimitedUntil != "" || c.CircuitOpenUntil != "" || c.TestStatus == "unavailable" || c.BackoffLevel > 0 || c.ConsecutiveFailures > 0 {
 			_ = f.store.ClearConnectionCooldown(c.ID)
 		}
+		resp.Header.Set("X-XRouter-Provider", c.Provider)
+		resp.Header.Set("X-XRouter-Connection-Id", c.ID)
+		if upstreamModel, ok := body["model"].(string); ok && strings.TrimSpace(upstreamModel) != "" {
+			resp.Header.Set("X-XRouter-Model", strings.TrimSpace(upstreamModel))
+		}
 		return resp, nil
 	}
 
