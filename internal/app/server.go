@@ -2,14 +2,10 @@ package app
 
 import (
 	"crypto/rand"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
-	"io"
 	"net/http"
 	"runtime"
-	"strings"
 	"sync"
 	"time"
 
@@ -91,97 +87,6 @@ func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeJSON(w, http.StatusOK, settings)
-	default:
-		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
-	}
-}
-
-func (s *Server) handleAuthFiles(w http.ResponseWriter, r *http.Request) {
-	if !isLocalOnlyRequest(r) {
-		writeJSON(w, http.StatusForbidden, map[string]string{"error": "auth file api is restricted to localhost"})
-		return
-	}
-	switch r.Method {
-	case http.MethodGet:
-		writeJSON(w, http.StatusOK, map[string]interface{}{"files": s.store.ListAuthFiles(r.URL.Query().Get("provider"), r.URL.Query().Get("account"))})
-	case http.MethodPost:
-		var body struct {
-			Name         string `json:"name"`
-			Provider     string `json:"provider"`
-			AccountName  string `json:"accountName"`
-			AccountEmail string `json:"accountEmail"`
-			ContentB64   string `json:"contentB64"`
-		}
-		if err := json.NewDecoder(io.LimitReader(r.Body, 3*1024*1024)).Decode(&body); err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
-			return
-		}
-		name := strings.TrimSpace(body.Name)
-		contentB64 := strings.TrimSpace(body.ContentB64)
-		if name == "" || contentB64 == "" {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "name and contentB64 are required"})
-			return
-		}
-		decoded, err := base64.StdEncoding.DecodeString(contentB64)
-		if err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "contentB64 must be valid base64"})
-			return
-		}
-		if len(decoded) > 2*1024*1024 {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "auth file too large"})
-			return
-		}
-		created, err := s.store.CreateAuthFile(store.AuthFile{
-			Name:         name,
-			Provider:     strings.TrimSpace(body.Provider),
-			AccountName:  strings.TrimSpace(body.AccountName),
-			AccountEmail: strings.TrimSpace(body.AccountEmail),
-			ContentB64:   contentB64,
-			Size:         len(decoded),
-		})
-		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-			return
-		}
-		created.ContentB64 = ""
-		writeJSON(w, http.StatusCreated, created)
-	default:
-		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
-	}
-}
-
-func (s *Server) handleAuthFileByID(w http.ResponseWriter, r *http.Request) {
-	if !isLocalOnlyRequest(r) {
-		writeJSON(w, http.StatusForbidden, map[string]string{"error": "auth file api is restricted to localhost"})
-		return
-	}
-	id := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/auth-files/"), "/")
-	if id == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "missing auth file id"})
-		return
-	}
-	switch r.Method {
-	case http.MethodGet:
-		item, ok := s.store.GetAuthFile(id)
-		if !ok {
-			writeJSON(w, http.StatusNotFound, map[string]string{"error": "auth file not found"})
-			return
-		}
-		decoded, err := base64.StdEncoding.DecodeString(item.ContentB64)
-		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "stored auth file is invalid"})
-			return
-		}
-		w.Header().Set("Content-Type", "application/octet-stream")
-		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", item.Name))
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write(decoded)
-	case http.MethodDelete:
-		if err := s.store.DeleteAuthFile(id); err != nil {
-			writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]bool{"success": true})
 	default:
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
 	}
