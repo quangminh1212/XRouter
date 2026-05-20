@@ -4,6 +4,7 @@
 /dist/
 /build/
 /.tmp-data/
+/.tmp-data-*/
 *.test
 *.test.exe
 
