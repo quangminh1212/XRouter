@@ -158,7 +158,7 @@ Reference repos:
 - [ ] Add `POST /v1/images/generations`
 - [ ] Add `POST /v1/audio/speech`
 - [ ] Add `POST /v1/audio/transcriptions`
-- [ ] Add `POST /v1/search`
+- [x] Add `POST /v1/search`
 - [ ] Add provider validate/test/models endpoints
 - [ ] Add detailed per-request usage logs
 
@@ -574,4 +574,5 @@ Legend:
   - built-in routing exists directly (`openai`, `anthropic`, `openrouter`), or
   - the current code can already route a generic compatible provider class without adding a whole new provider-specific auth flow.
 - `NO` means XRouter still needs at least one of: provider adapter logic, auth onboarding flow, model normalization, dedicated endpoint support, or management UX/API.
+
 
