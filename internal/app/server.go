@@ -137,6 +137,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/v1/images/generations", s.handleMediaProxy)
 	s.mux.HandleFunc("/v1/images/edits", s.handleMediaProxy)
 	s.mux.HandleFunc("/v1/images/analyze", s.handleMediaProxy)
+	s.mux.HandleFunc("/v1/videos/generations", s.handleMediaProxy)
 	s.mux.HandleFunc("/v1/audio/voices", s.handleAudioVoices)
 	s.mux.HandleFunc("/v1/audio/speech", s.handleMediaProxy)
 	s.mux.HandleFunc("/v1/audio/transcriptions", s.handleMediaProxy)
