@@ -26,6 +26,9 @@ jobs:
             exit 1
           fi
 
+      - name: Static analysis
+        run: go vet ./...
+
       - name: Run tests
         run: go test ./...
 
