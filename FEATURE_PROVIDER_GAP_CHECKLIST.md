@@ -98,7 +98,7 @@ Reference repos:
 - [x] Auth file upload/download/index flows
 - [x] Vertex credential import flow
 - [x] Proxy pools / upstream pool manager
-- [ ] Provider nodes / compatible node manager
+- [x] Provider nodes / compatible node manager
 
 ### 4) Authentication/provider onboarding
 
