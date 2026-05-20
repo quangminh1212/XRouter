@@ -90,6 +90,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/management/model-mappings", s.handleManagementModelMappings)
 	s.mux.HandleFunc("/api/quota", s.handleQuota)
 	s.mux.HandleFunc("/api/usage/summary", s.handleQuota)
+	s.mux.HandleFunc("/api/usage/stats", s.handleUsageStats)
 	s.mux.HandleFunc("/api/usage/logs", s.handleUsageLogs)
 	s.mux.HandleFunc("/api/usage/history", s.handleUsageHistory)
 	s.mux.HandleFunc("/api/debug/db", s.handleDebugDB)
@@ -1178,6 +1179,14 @@ func (s *Server) handleQuota(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, s.store.GetUsageSummary())
+}
+
+func (s *Server) handleUsageStats(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	writeJSON(w, http.StatusOK, s.store.GetUsageStats())
 }
 
 func (s *Server) handleUsageLogs(w http.ResponseWriter, r *http.Request) {

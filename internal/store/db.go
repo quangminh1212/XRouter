@@ -955,6 +955,65 @@ func (s *Store) GetUsageHistory(limit int, provider string) []UsageEntry {
 	return out
 }
 
+func (s *Store) GetUsageStats() map[string]interface{} {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	byProvider := map[string]DailySummary{}
+	byModel := map[string]DailySummary{}
+	byDay := map[string]DailySummary{}
+	var totalRequests int64
+	totalCost := 0.0
+	var promptTokens int64
+	var completionTokens int64
+	for _, item := range s.db.UsageData.History {
+		totalRequests++
+		totalCost += item.TotalCost
+		promptTokens += item.PromptTokens
+		completionTokens += item.CompletionTokens
+		addUsageStat(byProvider, item.Provider, item.TotalCost)
+		addUsageStat(byModel, item.Model, item.TotalCost)
+		day := usageDay(item.Timestamp)
+		if day != "" {
+			addUsageStat(byDay, day, item.TotalCost)
+		}
+	}
+	return map[string]interface{}{
+		"totalRequests":    totalRequests,
+		"totalCost":        totalCost,
+		"promptTokens":     promptTokens,
+		"completionTokens": completionTokens,
+		"totalTokens":      promptTokens + completionTokens,
+		"byProvider":       byProvider,
+		"byModel":          byModel,
+		"byDay":            byDay,
+	}
+}
+
+func addUsageStat(bucket map[string]DailySummary, key string, cost float64) {
+	key = strings.TrimSpace(key)
+	if key == "" {
+		key = "unknown"
+	}
+	cur := bucket[key]
+	cur.Requests++
+	cur.Cost += cost
+	bucket[key] = cur
+}
+
+func usageDay(timestamp string) string {
+	timestamp = strings.TrimSpace(timestamp)
+	if timestamp == "" {
+		return ""
+	}
+	if parsed, err := time.Parse(time.RFC3339, timestamp); err == nil {
+		return parsed.UTC().Format("2006-01-02")
+	}
+	if len(timestamp) >= len("2006-01-02") {
+		return timestamp[:len("2006-01-02")]
+	}
+	return timestamp
+}
+
 func pricingNumber(node map[string]interface{}, keys ...string) (float64, bool) {
 	for _, key := range keys {
 		raw, ok := node[key]
