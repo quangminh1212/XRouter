@@ -88,7 +88,7 @@ Reference repos:
 - [x] Usage request logs
 - [x] Usage history endpoint
 - [x] Usage chart/stats stream
-- [ ] Request detail endpoint
+- [x] Request detail endpoint
 - [ ] Model alias management
 - [ ] Disabled model management
 - [ ] Model availability checks
