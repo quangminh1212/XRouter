@@ -287,6 +287,14 @@ type MediaRequest struct {
 	Headers  http.Header
 }
 
+type OAuthRefreshResult struct {
+	AccessToken  string `json:"accessToken"`
+	RefreshToken string `json:"refreshToken,omitempty"`
+	TokenType    string `json:"tokenType,omitempty"`
+	TokenExpiry  string `json:"tokenExpiry,omitempty"`
+	Raw          any    `json:"raw,omitempty"`
+}
+
 func (f *Forwarder) Search(ctx context.Context, request SearchRequest) (SearchResponse, error) {
 	if err := f.refreshTransport(); err != nil {
 		return SearchResponse{}, err
@@ -463,6 +471,88 @@ func normalizeResultArray(raw interface{}, titleKey, urlKey, snippetKey string) 
 		})
 	}
 	return results
+}
+
+func (f *Forwarder) RefreshOAuthToken(ctx context.Context, c store.ProviderConnection, tokenURL, clientID, clientSecret string) (OAuthRefreshResult, error) {
+	if err := f.refreshTransport(); err != nil {
+		return OAuthRefreshResult{}, err
+	}
+	if strings.TrimSpace(c.RefreshToken) == "" {
+		return OAuthRefreshResult{}, fmt.Errorf("refresh token is required")
+	}
+	if strings.TrimSpace(tokenURL) == "" {
+		if entry, ok := store.GetProviderCatalogEntry(c.Provider); ok {
+			tokenURL = strings.TrimSpace(entry.TokenURL)
+		}
+	}
+	if strings.TrimSpace(tokenURL) == "" {
+		return OAuthRefreshResult{}, fmt.Errorf("token url is required")
+	}
+	form := url.Values{}
+	form.Set("grant_type", "refresh_token")
+	form.Set("refresh_token", c.RefreshToken)
+	if strings.TrimSpace(clientID) != "" {
+		form.Set("client_id", strings.TrimSpace(clientID))
+	}
+	if strings.TrimSpace(clientSecret) != "" {
+		form.Set("client_secret", strings.TrimSpace(clientSecret))
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, tokenURL, strings.NewReader(form.Encode()))
+	if err != nil {
+		return OAuthRefreshResult{}, err
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Accept", "application/json")
+	resp, err := f.client.Do(req)
+	if err != nil {
+		return OAuthRefreshResult{}, err
+	}
+	defer resp.Body.Close()
+	rawBody, err := io.ReadAll(io.LimitReader(resp.Body, 2*1024*1024))
+	if err != nil {
+		return OAuthRefreshResult{}, err
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return OAuthRefreshResult{}, fmt.Errorf("oauth refresh failed with status %d", resp.StatusCode)
+	}
+	var payload map[string]interface{}
+	if err := json.Unmarshal(rawBody, &payload); err != nil {
+		return OAuthRefreshResult{}, err
+	}
+	result := OAuthRefreshResult{
+		AccessToken:  strings.TrimSpace(fmt.Sprint(payload["access_token"])),
+		RefreshToken: strings.TrimSpace(fmt.Sprint(payload["refresh_token"])),
+		TokenType:    strings.TrimSpace(fmt.Sprint(payload["token_type"])),
+		Raw:          payload,
+	}
+	if result.AccessToken == "" || result.AccessToken == "<nil>" {
+		return OAuthRefreshResult{}, fmt.Errorf("oauth refresh response missing access_token")
+	}
+	if result.RefreshToken == "<nil>" {
+		result.RefreshToken = ""
+	}
+	if expiresIn, ok := payload["expires_in"]; ok {
+		if seconds, ok := asNumberishInt64(expiresIn); ok && seconds > 0 {
+			result.TokenExpiry = time.Now().UTC().Add(time.Duration(seconds) * time.Second).Format(time.RFC3339)
+		}
+	}
+	return result, nil
+}
+
+func asNumberishInt64(v interface{}) (int64, bool) {
+	switch n := v.(type) {
+	case float64:
+		return int64(n), true
+	case int64:
+		return n, true
+	case int:
+		return int64(n), true
+	case string:
+		parsed, err := strconv.ParseInt(strings.TrimSpace(n), 10, 64)
+		return parsed, err == nil
+	default:
+		return 0, false
+	}
 }
 
 func (f *Forwarder) ForwardMedia(ctx context.Context, request MediaRequest) (*http.Response, error) {

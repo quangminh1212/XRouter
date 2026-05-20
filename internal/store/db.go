@@ -21,6 +21,7 @@ type ProviderCatalogEntry struct {
 	AuthType       string   `json:"authType,omitempty"`
 	APIType        string   `json:"apiType"`
 	BaseURL        string   `json:"baseUrl"`
+	TokenURL       string   `json:"tokenUrl,omitempty"`
 	FallbackModels []string `json:"fallbackModels,omitempty"`
 }
 
@@ -47,13 +48,13 @@ var providerCatalog = map[string]ProviderCatalogEntry{
 	"tavily":            {Provider: "tavily", AuthType: "apikey", APIType: "search", BaseURL: "https://api.tavily.com"},
 	"exa":               {Provider: "exa", AuthType: "apikey", APIType: "search", BaseURL: "https://api.exa.ai"},
 	"perplexity-search": {Provider: "perplexity-search", AuthType: "apikey", APIType: "search", BaseURL: "https://api.perplexity.ai"},
-	"claude":            {Provider: "claude", AuthType: "oauth", APIType: "anthropic", BaseURL: "https://api.anthropic.com", FallbackModels: []string{"claude/claude-3-5-sonnet-latest"}},
-	"codex":             {Provider: "codex", AuthType: "oauth", APIType: "openai", BaseURL: "https://api.openai.com", FallbackModels: []string{"codex/gpt-4o-mini"}},
+	"claude":            {Provider: "claude", AuthType: "oauth", APIType: "anthropic", BaseURL: "https://api.anthropic.com", TokenURL: "https://console.anthropic.com/v1/oauth/token", FallbackModels: []string{"claude/claude-3-5-sonnet-latest"}},
+	"codex":             {Provider: "codex", AuthType: "oauth", APIType: "openai", BaseURL: "https://api.openai.com", TokenURL: "https://auth.openai.com/oauth/token", FallbackModels: []string{"codex/gpt-4o-mini"}},
 	"github":            {Provider: "github", AuthType: "oauth", APIType: "openai", BaseURL: "https://models.inference.ai.azure.com", FallbackModels: []string{"github/gpt-4o-mini"}},
-	"gemini":            {Provider: "gemini", AuthType: "oauth", APIType: "openai", BaseURL: "https://generativelanguage.googleapis.com/v1beta/openai", FallbackModels: []string{"gemini/gemini-1.5-flash"}},
-	"xai":               {Provider: "xai", AuthType: "oauth", APIType: "openai", BaseURL: "https://api.x.ai", FallbackModels: []string{"xai/grok-2-latest"}},
+	"gemini":            {Provider: "gemini", AuthType: "oauth", APIType: "openai", BaseURL: "https://generativelanguage.googleapis.com/v1beta/openai", TokenURL: "https://oauth2.googleapis.com/token", FallbackModels: []string{"gemini/gemini-1.5-flash"}},
+	"xai":               {Provider: "xai", AuthType: "oauth", APIType: "openai", BaseURL: "https://api.x.ai", TokenURL: "https://accounts.x.ai/oauth/token", FallbackModels: []string{"xai/grok-2-latest"}},
 	"antigravity":       {Provider: "antigravity", AuthType: "oauth", APIType: "openai", BaseURL: "https://api.antigravity.ai/v1"},
-	"kimi":              {Provider: "kimi", AuthType: "oauth", APIType: "openai", BaseURL: "https://api.moonshot.ai", FallbackModels: []string{"kimi/moonshot-v1-8k"}},
+	"kimi":              {Provider: "kimi", AuthType: "oauth", APIType: "openai", BaseURL: "https://api.moonshot.ai", TokenURL: "https://www.kimi.com/api/oauth/token", FallbackModels: []string{"kimi/moonshot-v1-8k"}},
 }
 
 type ProviderConnection struct {
@@ -64,6 +65,7 @@ type ProviderConnection struct {
 	APIKey               string                 `json:"apiKey,omitempty"`
 	AccessToken          string                 `json:"accessToken,omitempty"`
 	RefreshToken         string                 `json:"refreshToken,omitempty"`
+	TokenExpiry          string                 `json:"tokenExpiry,omitempty"`
 	IsActive             bool                   `json:"isActive"`
 	Priority             int                    `json:"priority"`
 	GlobalPriority       *int                   `json:"globalPriority,omitempty"`
@@ -442,6 +444,17 @@ func (s *Store) GetAllConnectionsRaw() []ProviderConnection {
 	return out
 }
 
+func (s *Store) GetConnectionByIDRaw(id string) (ProviderConnection, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, c := range s.db.ProviderConnections {
+		if c.ID == id {
+			return c, true
+		}
+	}
+	return ProviderConnection{}, false
+}
+
 func (s *Store) ClearAllCooldowns() (int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -586,6 +599,31 @@ func (s *Store) DeleteProviderConnection(id string) error {
 	}
 	s.db.ProviderConnections = next
 	return s.persistLocked()
+}
+
+func (s *Store) UpdateOAuthTokens(id, accessToken, refreshToken, tokenExpiry string) (ProviderConnection, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.db.ProviderConnections {
+		if s.db.ProviderConnections[i].ID != id {
+			continue
+		}
+		if strings.TrimSpace(accessToken) != "" {
+			s.db.ProviderConnections[i].AccessToken = strings.TrimSpace(accessToken)
+		}
+		if strings.TrimSpace(refreshToken) != "" {
+			s.db.ProviderConnections[i].RefreshToken = strings.TrimSpace(refreshToken)
+		}
+		if tokenExpiry != "" {
+			s.db.ProviderConnections[i].TokenExpiry = tokenExpiry
+		}
+		s.db.ProviderConnections[i].UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+		if err := s.persistLocked(); err != nil {
+			return ProviderConnection{}, err
+		}
+		return s.db.ProviderConnections[i], nil
+	}
+	return ProviderConnection{}, fmt.Errorf("provider connection not found")
 }
 
 func (s *Store) ValidateAPIKey(key string) bool {

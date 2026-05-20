@@ -265,6 +265,10 @@ func (s *Server) handleOAuthProviders(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleOAuthProviderImport(w http.ResponseWriter, r *http.Request) {
+	if strings.HasSuffix(strings.TrimSpace(r.URL.Path), "/refresh") {
+		s.handleOAuthProviderRefresh(w, r)
+		return
+	}
 	if !isLocalOnlyRequest(r) {
 		writeJSON(w, http.StatusForbidden, map[string]string{"error": "oauth provider management is restricted to localhost"})
 		return
@@ -321,6 +325,58 @@ func (s *Server) handleOAuthProviderImport(w http.ResponseWriter, r *http.Reques
 	}
 	created.APIKey, created.AccessToken, created.RefreshToken = "", "", ""
 	writeJSON(w, http.StatusCreated, created)
+}
+
+func (s *Server) handleOAuthProviderRefresh(w http.ResponseWriter, r *http.Request) {
+	if !isLocalOnlyRequest(r) {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "oauth provider management is restricted to localhost"})
+		return
+	}
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	suffix := strings.TrimPrefix(r.URL.Path, "/api/oauth/providers/")
+	id := strings.TrimSuffix(strings.TrimSpace(suffix), "/refresh")
+	if !strings.HasSuffix(suffix, "/refresh") || id == "" {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
+		return
+	}
+	connection, ok := s.store.GetConnectionByIDRaw(id)
+	if !ok {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "provider connection not found"})
+		return
+	}
+	if connection.AuthType != "oauth" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "provider connection is not oauth"})
+		return
+	}
+	var body struct {
+		TokenURL     string `json:"tokenUrl"`
+		ClientID     string `json:"clientId"`
+		ClientSecret string `json:"clientSecret"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil && err != io.EOF {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return
+	}
+	result, err := s.forwarder.RefreshOAuthToken(r.Context(), connection, strings.TrimSpace(body.TokenURL), strings.TrimSpace(body.ClientID), strings.TrimSpace(body.ClientSecret))
+	if err != nil {
+		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+		return
+	}
+	updated, err := s.store.UpdateOAuthTokens(connection.ID, result.AccessToken, result.RefreshToken, result.TokenExpiry)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	updated.APIKey, updated.AccessToken, updated.RefreshToken = "", "", ""
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"success":     true,
+		"connection":  updated,
+		"tokenType":   result.TokenType,
+		"tokenExpiry": result.TokenExpiry,
+	})
 }
 
 func (s *Server) handleAPIKeys(w http.ResponseWriter, r *http.Request) {
