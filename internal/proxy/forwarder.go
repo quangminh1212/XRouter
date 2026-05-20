@@ -1120,7 +1120,7 @@ func mediaAPIType(path string) string {
 		return "image"
 	case "/v1/images/analyze":
 		return "vision"
-	case "/v1/videos/generations":
+	case "/v1/videos/generations", "/v1/videos/edits", "/v1/videos/extensions":
 		return "video"
 	case "/v1/audio/speech":
 		return "tts"
@@ -1203,7 +1203,7 @@ func resolveMediaEndpoint(c store.ProviderConnection, path, apiType string) (str
 	case "vision":
 		return joinOpenAIEndpoint(baseURL, "/v1/chat/completions"), "openai", nil
 	case "video":
-		return joinOpenAIEndpoint(baseURL, "/v1/videos/generations"), "openai", nil
+		return joinOpenAIEndpoint(baseURL, path), "openai", nil
 	case "tts":
 		return joinOpenAIEndpoint(baseURL, "/v1/audio/speech"), "openai", nil
 	case "stt":

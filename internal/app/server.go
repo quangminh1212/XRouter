@@ -138,6 +138,9 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/v1/images/edits", s.handleMediaProxy)
 	s.mux.HandleFunc("/v1/images/analyze", s.handleMediaProxy)
 	s.mux.HandleFunc("/v1/videos/generations", s.handleMediaProxy)
+	s.mux.HandleFunc("/v1/videos/edits", s.handleMediaProxy)
+	s.mux.HandleFunc("/v1/videos/extensions", s.handleMediaProxy)
+	s.mux.HandleFunc("/v1/videos/", s.handleVideoByID)
 	s.mux.HandleFunc("/v1/audio/voices", s.handleAudioVoices)
 	s.mux.HandleFunc("/v1/audio/speech", s.handleMediaProxy)
 	s.mux.HandleFunc("/v1/audio/transcriptions", s.handleMediaProxy)
@@ -2796,6 +2799,109 @@ func (s *Server) handleGeminiAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, openAIResponseToGemini(openAIResponse))
+}
+
+func resolveConnectionBaseURL(conn store.ProviderConnection) (string, bool) {
+	if conn.ProviderSpecificData != nil {
+		if v, ok := conn.ProviderSpecificData["baseUrl"].(string); ok && strings.TrimSpace(v) != "" {
+			return strings.TrimRight(strings.TrimSpace(v), "/"), true
+		}
+	}
+	entry, ok := store.GetProviderCatalogEntry(conn.Provider)
+	if !ok {
+		return "", false
+	}
+	return strings.TrimRight(strings.TrimSpace(entry.BaseURL), "/"), true
+}
+
+func (s *Server) handleVideoByID(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
+	if r.Method != http.MethodGet {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	apiKey, err := s.authorize(r)
+	if err != nil {
+		if strings.Contains(err.Error(), "rate limit exceeded") {
+			writeJSON(w, http.StatusTooManyRequests, map[string]string{"error": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": err.Error()})
+		return
+	}
+	videoID := strings.Trim(strings.TrimPrefix(r.URL.Path, "/v1/videos/"), "/")
+	if videoID == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "missing video id"})
+		return
+	}
+	connections := s.store.GetActiveConnections("")
+	var targetConn *store.ProviderConnection
+	for i := range connections {
+		conn := &connections[i]
+		entry, ok := store.GetProviderCatalogEntry(conn.Provider)
+		if !ok {
+			continue
+		}
+		if entry.APIType == "video" || entry.APIType == "openai" {
+			targetConn = conn
+			break
+		}
+	}
+	if targetConn == nil {
+		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "no active video provider connections"})
+		return
+	}
+	baseURL, ok := resolveConnectionBaseURL(*targetConn)
+	if !ok || baseURL == "" {
+		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "video provider base url is missing"})
+		return
+	}
+	upstreamURL := baseURL + "/v1/videos/" + url.PathEscape(videoID)
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, upstreamURL, nil)
+	if err != nil {
+		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "failed to build upstream request"})
+		return
+	}
+	if strings.TrimSpace(targetConn.APIKey) != "" {
+		req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(targetConn.APIKey))
+	} else if strings.TrimSpace(targetConn.AccessToken) != "" {
+		req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(targetConn.AccessToken))
+	}
+	resp, err := s.forwarder.HTTPClient().Do(req)
+	if err != nil {
+		_ = s.store.RecordRequestLog(store.RequestLog{
+			Path:       r.URL.Path,
+			APIKeyID:   apiKey.ID,
+			StatusCode: http.StatusBadGateway,
+			LatencyMs:  time.Since(start).Milliseconds(),
+			Error:      err.Error(),
+		})
+		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+		return
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 8*1024*1024))
+	if err != nil {
+		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "failed to read upstream response"})
+		return
+	}
+	_ = s.store.RecordRequestLog(store.RequestLog{
+		Path:          r.URL.Path,
+		APIKeyID:      apiKey.ID,
+		StatusCode:    resp.StatusCode,
+		LatencyMs:     time.Since(start).Milliseconds(),
+		ResponseBytes: len(body),
+	})
+	for _, k := range []string{"Content-Type", "Cache-Control", "X-Request-Id"} {
+		if v := resp.Header.Get(k); v != "" {
+			w.Header().Set(k, v)
+		}
+	}
+	if w.Header().Get("Content-Type") == "" {
+		w.Header().Set("Content-Type", "application/json")
+	}
+	w.WriteHeader(resp.StatusCode)
+	_, _ = w.Write(body)
 }
 
 func (s *Server) handleMediaProxy(w http.ResponseWriter, r *http.Request) {
