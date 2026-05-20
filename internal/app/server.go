@@ -91,6 +91,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/quota", s.handleQuota)
 	s.mux.HandleFunc("/api/usage/summary", s.handleQuota)
 	s.mux.HandleFunc("/api/usage/stats", s.handleUsageStats)
+	s.mux.HandleFunc("/api/usage/logs/", s.handleUsageLogByID)
 	s.mux.HandleFunc("/api/usage/logs", s.handleUsageLogs)
 	s.mux.HandleFunc("/api/usage/history", s.handleUsageHistory)
 	s.mux.HandleFunc("/api/debug/db", s.handleDebugDB)
@@ -1205,6 +1206,24 @@ func (s *Server) handleUsageLogs(w http.ResponseWriter, r *http.Request) {
 		"items": logs,
 		"count": len(logs),
 	})
+}
+
+func (s *Server) handleUsageLogByID(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	id := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/usage/logs/"), "/")
+	if id == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "missing request log id"})
+		return
+	}
+	item, ok := s.store.GetRequestLogByID(id)
+	if !ok {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "request log not found"})
+		return
+	}
+	writeJSON(w, http.StatusOK, item)
 }
 
 func (s *Server) handleUsageHistory(w http.ResponseWriter, r *http.Request) {

@@ -937,6 +937,18 @@ func (s *Store) GetRequestLogs(limit int) []RequestLog {
 	return out
 }
 
+func (s *Store) GetRequestLogByID(id string) (RequestLog, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	id = strings.TrimSpace(id)
+	for _, item := range s.db.RequestLogs {
+		if item.ID == id {
+			return item, true
+		}
+	}
+	return RequestLog{}, false
+}
+
 func (s *Store) GetUsageHistory(limit int, provider string) []UsageEntry {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
