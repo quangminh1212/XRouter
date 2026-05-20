@@ -85,6 +85,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/version", s.handleVersion)
 	s.mux.HandleFunc("/api/settings", s.handleSettings)
 	s.mux.HandleFunc("/api/providers", s.handleProviders)
+	s.mux.HandleFunc("/api/providers/catalog", s.handleProviderCatalog)
 	s.mux.HandleFunc("/api/providers/cookie-import", s.handleProviderCookieImport)
 	s.mux.HandleFunc("/api/providers/", s.handleProviderByID)
 	s.mux.HandleFunc("/api/oauth/providers", s.handleOAuthProviders)
@@ -287,6 +288,30 @@ func (s *Server) handleProviders(w http.ResponseWriter, r *http.Request) {
 	default:
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
 	}
+}
+
+func (s *Server) handleProviderCatalog(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	entries := store.ListProviderCatalogEntries()
+	apiType := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("apiType")))
+	authType := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("authType")))
+	filtered := make([]store.ProviderCatalogEntry, 0, len(entries))
+	for _, item := range entries {
+		if apiType != "" && strings.ToLower(strings.TrimSpace(item.APIType)) != apiType {
+			continue
+		}
+		if authType != "" && strings.ToLower(strings.TrimSpace(item.AuthType)) != authType {
+			continue
+		}
+		filtered = append(filtered, item)
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"providers": filtered,
+		"count":     len(filtered),
+	})
 }
 
 func (s *Server) handleProviderCookieImport(w http.ResponseWriter, r *http.Request) {
