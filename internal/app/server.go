@@ -1254,6 +1254,10 @@ func (s *Server) handleOAuthProviderStart(w http.ResponseWriter, r *http.Request
 	if clientID == "" {
 		clientID = strings.TrimSpace(entry.ClientID)
 	}
+	if clientID == "" {
+		envName := "XROUTER_" + strings.ToUpper(strings.ReplaceAll(provider, "-", "_")) + "_OAUTH_CLIENT_ID"
+		clientID = strings.TrimSpace(os.Getenv(envName))
+	}
 	authorizeURL := strings.TrimSpace(body.AuthorizeURL)
 	if authorizeURL == "" {
 		authorizeURL = strings.TrimSpace(entry.AuthorizeURL)

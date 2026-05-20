@@ -57,7 +57,7 @@ var providerCatalog = map[string]ProviderCatalogEntry{
 	"gemini":            {Provider: "gemini", AuthType: "oauth", APIType: "openai", BaseURL: "https://generativelanguage.googleapis.com/v1beta/openai", AuthorizeURL: "https://accounts.google.com/o/oauth2/v2/auth", TokenURL: "https://oauth2.googleapis.com/token", ClientID: "gemini-cli", Scopes: []string{"https://www.googleapis.com/auth/cloud-platform", "https://www.googleapis.com/auth/userinfo.email"}, FallbackModels: []string{"gemini/gemini-1.5-flash"}},
 	"vertex":            {Provider: "vertex", AuthType: "oauth", APIType: "openai", BaseURL: "https://aiplatform.googleapis.com/v1beta1", FallbackModels: []string{"vertex/gemini-1.5-flash"}},
 	"xai":               {Provider: "xai", AuthType: "oauth", APIType: "openai", BaseURL: "https://api.x.ai", TokenURL: "https://accounts.x.ai/oauth/token", FallbackModels: []string{"xai/grok-2-latest"}},
-	"antigravity":       {Provider: "antigravity", AuthType: "oauth", APIType: "openai", BaseURL: "https://api.antigravity.ai/v1"},
+	"antigravity":       {Provider: "antigravity", AuthType: "oauth", APIType: "openai", BaseURL: "https://api.antigravity.ai/v1", AuthorizeURL: "https://accounts.google.com/o/oauth2/v2/auth", TokenURL: "https://oauth2.googleapis.com/token", Scopes: []string{"openid", "profile", "email", "offline_access"}},
 	"kimi":              {Provider: "kimi", AuthType: "oauth", APIType: "openai", BaseURL: "https://api.moonshot.ai", TokenURL: "https://www.kimi.com/api/oauth/token", FallbackModels: []string{"kimi/moonshot-v1-8k"}},
 }
 
