@@ -123,7 +123,7 @@ Reference repos:
 - [x] Rich routing strategies like those advertised by OmniRoute
 - [x] Combo model system
 - [ ] Multi-account weighted round-robin / quota-aware selection
-- [ ] Provider/account-level policy assignment
+- [x] Provider/account-level policy assignment
 - [x] MCP endpoints/server integration
 - [x] A2A protocol endpoints
 - [x] Tunnel/remote exposure features
