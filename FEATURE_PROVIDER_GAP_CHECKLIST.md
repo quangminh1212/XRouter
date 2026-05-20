@@ -91,7 +91,7 @@ Reference repos:
 - [x] Request detail endpoint
 - [x] Model alias management
 - [x] Disabled model management
-- [ ] Model availability checks
+- [x] Model availability checks
 - [ ] Routing strategy management
 - [ ] Retry/max retry interval management
 - [ ] OAuth excluded models / model alias controls
@@ -172,7 +172,7 @@ Reference repos:
 - [ ] Add model alias / disabled / availability management
   - [x] Model alias management
   - [x] Disabled model management
-  - [ ] Model availability management
+  - [x] Model availability management
 - [ ] Add CLI-compatible aliases and advanced response variants
 
 ### P3 - platform parity layer
