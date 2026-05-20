@@ -61,12 +61,12 @@ Reference repos:
 
 ### 2) Media and non-chat endpoints
 
-- [ ] Embeddings
+- [x] Embeddings
 - [ ] Images generations
 - [ ] Images edits
 - [ ] Image-to-text / vision-specific media route
-- [ ] Text-to-speech
-- [ ] Speech-to-text
+- [x] Text-to-speech
+- [x] Speech-to-text
 - [ ] Video generation
 - [ ] Video edits/extensions/retrieve
 - [ ] Music/audio generation
@@ -574,5 +574,6 @@ Legend:
   - built-in routing exists directly (`openai`, `anthropic`, `openrouter`), or
   - the current code can already route a generic compatible provider class without adding a whole new provider-specific auth flow.
 - `NO` means XRouter still needs at least one of: provider adapter logic, auth onboarding flow, model normalization, dedicated endpoint support, or management UX/API.
+
 
 
