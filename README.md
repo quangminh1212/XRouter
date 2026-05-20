@@ -17,6 +17,7 @@ $env:XROUTER_ADDR=':1214'; go run ./cmd/xrouter
 ## Core Endpoints
 
 - `GET /api/health`
+- `GET /api/version`
 - `GET/PATCH /api/settings`
 - `GET/POST /api/providers`
 - `PATCH/DELETE /api/providers/{id}`
@@ -67,14 +68,24 @@ Use `provider/model` names, for example `openai-compatible/gpt-test`, `anthropic
 
 - `GET /dashboard` (localhost only) renders an embedded HTML page that consumes `/api/usage/stats`, `/api/usage/logs` and `/api/usage/stream` for a live view of activity.
 
+## Versioning
+
+- `GET /api/version` returns build metadata: `version`, `commit`, `date`, `goVersion`, `uptimeSec`.
+- Override defaults at build time via `-ldflags`:
+
+```powershell
+go build -ldflags "-X xrouter/internal/version.Version=v0.1.0 -X xrouter/internal/version.Commit=abc123 -X xrouter/internal/version.Date=2026-05-20T00:00:00Z" ./cmd/xrouter
+```
+
 ## Tests and CI
 
 Run the full suite locally:
 
 ```powershell
 gofmt -l .
+go vet ./...
 go test ./...
 go build ./cmd/xrouter
 ```
 
-The repository ships with `.github/workflows/ci.yml` which runs `gofmt`, `go test ./...` and `go build ./cmd/xrouter` on every push and pull request to `main`.
+The repository ships with `.github/workflows/ci.yml` which runs `gofmt`, `go vet ./...`, `go test ./...` and `go build ./cmd/xrouter` on every push and pull request to `main`.

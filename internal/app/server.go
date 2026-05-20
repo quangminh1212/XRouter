@@ -24,6 +24,7 @@ import (
 
 	"xrouter/internal/proxy"
 	"xrouter/internal/store"
+	"xrouter/internal/version"
 )
 
 type Server struct {
@@ -81,6 +82,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) routes() {
 	s.mux.HandleFunc("/api/health", s.handleHealth)
+	s.mux.HandleFunc("/api/version", s.handleVersion)
 	s.mux.HandleFunc("/api/settings", s.handleSettings)
 	s.mux.HandleFunc("/api/providers", s.handleProviders)
 	s.mux.HandleFunc("/api/providers/cookie-import", s.handleProviderCookieImport)
@@ -2576,6 +2578,17 @@ func (s *Server) handleQuota(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, s.store.GetUsageSummary())
+}
+
+func (s *Server) handleVersion(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	payload := version.Info()
+	payload["name"] = "xrouter"
+	payload["uptimeSec"] = strconv.Itoa(int(time.Since(s.startedAt).Seconds()))
+	writeJSON(w, http.StatusOK, payload)
 }
 
 func (s *Server) handleUsageStats(w http.ResponseWriter, r *http.Request) {
