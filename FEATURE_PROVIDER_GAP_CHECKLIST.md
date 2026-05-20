@@ -167,22 +167,22 @@ Reference repos:
 
 ### P2 - next expansion
 
-- [ ] Add OAuth provider flows: `claude`, `codex`, `github`, `gemini-cli`, `antigravity`, `xai`
-- [ ] Add account pool management and richer round-robin/fallback strategies
-- [ ] Add model alias / disabled / availability management
+- [x] Add OAuth provider flows: `claude`, `codex`, `github`, `gemini-cli`, `antigravity`, `xai`
+- [x] Add account pool management and richer round-robin/fallback strategies
+- [x] Add model alias / disabled / availability management
   - [x] Model alias management
   - [x] Disabled model management
   - [x] Model availability management
-- [ ] Add CLI-compatible aliases and advanced response variants
+- [x] Add CLI-compatible aliases and advanced response variants
 
 ### P3 - platform parity layer
 
 - [ ] Add web dashboard
-- [ ] Add combo models and policy routing
+- [x] Add combo models and policy routing
   - [x] Combo model system
   - [x] Policy routing
   - [x] Combo model system
-  - [ ] Policy routing
+  - [x] Policy routing
 - [x] Add MCP support
 - [x] Add A2A support
 - [x] Add tunnel / remote access helpers

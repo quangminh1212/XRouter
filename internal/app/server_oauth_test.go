@@ -250,6 +250,28 @@ func TestKimiOAuthStartUsesEnvAuthorizeAndClientID(t *testing.T) {
 	}
 }
 
+func TestGitHubOAuthStartUsesEnvAuthorizeAndClientID(t *testing.T) {
+	srv := newTestServer(t)
+	t.Setenv("XROUTER_GITHUB_OAUTH_AUTHORIZE_URL", "https://github.example.com/login/oauth/authorize")
+	t.Setenv("XROUTER_GITHUB_OAUTH_TOKEN_URL", "https://github.example.com/login/oauth/access_token")
+	t.Setenv("XROUTER_GITHUB_OAUTH_CLIENT_ID", "github-test-client")
+	req := httptest.NewRequest(http.MethodPost, "/api/oauth/providers/github/start", bytes.NewReader([]byte(`{}`)))
+	req.Host = "localhost:1213"
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("start expected 200, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	var payload map[string]interface{}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	authURL, _ := payload["authorizationUrl"].(string)
+	if !strings.Contains(authURL, "github.example.com") || !strings.Contains(authURL, "client_id=github-test-client") {
+		t.Fatalf("unexpected authorizationUrl: %s", authURL)
+	}
+}
+
 func TestXAIOAuthStartUsesEnvAuthorizeAndClientID(t *testing.T) {
 	srv := newTestServer(t)
 	t.Setenv("XROUTER_XAI_OAUTH_AUTHORIZE_URL", "https://xai.example.com/oauth/authorize")
