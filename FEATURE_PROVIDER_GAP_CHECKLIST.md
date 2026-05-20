@@ -128,7 +128,7 @@ Reference repos:
 - [x] A2A protocol endpoints
 - [x] Tunnel/remote exposure features
 - [x] CLI auto-config endpoints for external tools
-- [ ] Dashboard/web UI
+- [x] Dashboard/web UI
 - [x] Real-time logs/analytics UI
 
 ## Reference Repo Coverage Snapshot
@@ -177,7 +177,7 @@ Reference repos:
 
 ### P3 - platform parity layer
 
-- [ ] Add web dashboard
+- [x] Add web dashboard
 - [x] Add combo models and policy routing
   - [x] Combo model system
   - [x] Policy routing

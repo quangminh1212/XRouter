@@ -127,6 +127,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/usage/history", s.handleUsageHistory)
 	s.mux.HandleFunc("/api/debug/db", s.handleDebugDB)
 	s.mux.HandleFunc("/api/monitoring/health", s.handleMonitoringHealth)
+	s.mux.HandleFunc("/dashboard", s.handleDashboard)
 	s.mux.HandleFunc("/v1/chat/completions", s.handleProxy)
 	s.mux.HandleFunc("/v1/completions", s.handleProxy)
 	s.mux.HandleFunc("/v1/messages", s.handleProxy)
@@ -2358,6 +2359,103 @@ func (s *Server) handleMonitoringHealth(w http.ResponseWriter, r *http.Request) 
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
 	}
 }
+
+func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	if !isLocalOnlyRequest(r) {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "dashboard is restricted to localhost"})
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	_, _ = w.Write([]byte(dashboardHTML))
+}
+
+const dashboardHTML = `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>XRouter Dashboard</title>
+  <style>
+    :root { color-scheme: dark; font-family: Inter, system-ui, sans-serif; background: #0f172a; color: #e2e8f0; }
+    body { margin: 0; padding: 24px; }
+    header { display: flex; justify-content: space-between; gap: 16px; align-items: center; margin-bottom: 20px; }
+    h1 { margin: 0; font-size: 24px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 18px; }
+    .card { background: #111827; border: 1px solid #1f2937; border-radius: 14px; padding: 14px; box-shadow: 0 10px 30px rgba(0,0,0,.18); }
+    .label { color: #94a3b8; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; }
+    .value { margin-top: 8px; font-size: 26px; font-weight: 700; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { border-bottom: 1px solid #1f2937; padding: 10px 8px; text-align: left; vertical-align: top; }
+    th { color: #93c5fd; font-weight: 600; }
+    code { color: #a7f3d0; }
+    .status { color: #22c55e; }
+    .error { color: #fb7185; }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>XRouter Dashboard</h1>
+      <div class="label">Local realtime usage, logs, stats</div>
+    </div>
+    <div id="streamStatus" class="status">connecting</div>
+  </header>
+  <section class="grid">
+    <div class="card"><div class="label">Requests</div><div id="totalRequests" class="value">0</div></div>
+    <div class="card"><div class="label">Prompt Tokens</div><div id="promptTokens" class="value">0</div></div>
+    <div class="card"><div class="label">Completion Tokens</div><div id="completionTokens" class="value">0</div></div>
+    <div class="card"><div class="label">Cost</div><div id="totalCost" class="value">$0.0000</div></div>
+  </section>
+  <section class="card">
+    <h2>Recent Requests</h2>
+    <table>
+      <thead><tr><th>Time</th><th>Status</th><th>Provider</th><th>Model</th><th>Path</th><th>Error</th></tr></thead>
+      <tbody id="logs"><tr><td colspan="6">Loading...</td></tr></tbody>
+    </table>
+  </section>
+  <script>
+    const fmt = new Intl.NumberFormat();
+    const money = new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 4 });
+    function setStats(stats = {}) {
+      totalRequests.textContent = fmt.format(stats.totalRequests || 0);
+      promptTokens.textContent = fmt.format(stats.promptTokens || 0);
+      completionTokens.textContent = fmt.format(stats.completionTokens || 0);
+      totalCost.textContent = money.format(stats.totalCost || 0);
+    }
+    function setLogs(items = []) {
+      logs.innerHTML = items.length ? items.map(item => '<tr>' +
+        '<td>' + (item.timestamp || '') + '</td>' +
+        '<td>' + (item.statusCode || '') + '</td>' +
+        '<td><code>' + (item.provider || '') + '</code></td>' +
+        '<td><code>' + (item.model || '') + '</code></td>' +
+        '<td>' + (item.path || '') + '</td>' +
+        '<td class="error">' + (item.error || '') + '</td>' +
+      '</tr>').join('') : '<tr><td colspan="6">No requests yet</td></tr>';
+    }
+    async function loadInitial() {
+      const [statsRes, logsRes] = await Promise.all([fetch('/api/usage/stats'), fetch('/api/usage/logs?limit=50')]);
+      setStats(await statsRes.json());
+      const payload = await logsRes.json();
+      setLogs(payload.items || []);
+    }
+    loadInitial().catch(err => { streamStatus.textContent = err.message; streamStatus.className = 'error'; });
+    const source = new EventSource('/api/usage/stream?limit=50');
+    source.onopen = () => { streamStatus.textContent = 'live'; streamStatus.className = 'status'; };
+    source.onerror = () => { streamStatus.textContent = 'disconnected'; streamStatus.className = 'error'; };
+    for (const type of ['snapshot', 'update']) {
+      source.addEventListener(type, event => {
+        const payload = JSON.parse(event.data);
+        setStats(payload.stats);
+        setLogs(payload.logs || []);
+      });
+    }
+  </script>
+</body>
+</html>`
 
 func (s *Server) monitoringHealthPayload() map[string]interface{} {
 	now := time.Now().UTC()

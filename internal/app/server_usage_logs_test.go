@@ -116,3 +116,23 @@ func TestUsageStreamSnapshot(t *testing.T) {
 		t.Fatalf("unexpected stream body: %s", body)
 	}
 }
+
+func TestDashboardRendersUsageUI(t *testing.T) {
+	srv := newTestServer(t)
+	req := httptest.NewRequest(http.MethodGet, "/dashboard", nil)
+	req.Host = "localhost:1213"
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	if got := rec.Header().Get("Content-Type"); !strings.Contains(got, "text/html") {
+		t.Fatalf("unexpected content type: %s", got)
+	}
+	body := rec.Body.String()
+	for _, want := range []string{"XRouter Dashboard", "/api/usage/stats", "/api/usage/logs?limit=50", "/api/usage/stream?limit=50"} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("dashboard missing %q", want)
+		}
+	}
+}
