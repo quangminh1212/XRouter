@@ -106,7 +106,7 @@ Reference repos:
 - [x] OAuth token import groundwork (local-only API)`r`n- [x] OAuth token manual refresh endpoint`r`n- [x] OAuth token auto-refresh before request / one retry on 401`r`n- [x] OAuth PKCE browser flow groundwork for codex/gemini
 - [x] Manual access token storage
 - [x] Manual refresh token storage
-- [ ] OAuth login flow for Claude
+- [x] OAuth login flow for Claude
 - [x] OAuth login flow for Codex/OpenAI
 - [ ] OAuth login flow for Gemini CLI
 - [ ] OAuth login flow for Antigravity
