@@ -180,6 +180,8 @@ Reference repos:
 - [ ] Add web dashboard
 - [ ] Add combo models and policy routing
   - [x] Combo model system
+  - [x] Policy routing
+  - [x] Combo model system
   - [ ] Policy routing
 - [ ] Add MCP support
 - [ ] Add A2A support
