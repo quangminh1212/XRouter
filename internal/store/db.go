@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -669,6 +670,9 @@ func (s *Store) RecordUsage(entry UsageEntry) error {
 	if entry.Timestamp == "" {
 		entry.Timestamp = now.Format(time.RFC3339)
 	}
+	if entry.TotalCost == 0 {
+		entry.TotalCost = estimateCost(s.db.Pricing, entry.Model, entry.PromptTokens, entry.CompletionTokens)
+	}
 	s.db.UsageData.TotalRequestsLifetime++
 	s.db.UsageData.History = append(s.db.UsageData.History, entry)
 	limit := s.db.Settings.ObservabilityMaxRecords
@@ -684,6 +688,57 @@ func (s *Store) RecordUsage(entry UsageEntry) error {
 	daily.Cost += entry.TotalCost
 	s.db.UsageData.DailySummary[day] = daily
 	return s.persistLocked()
+}
+
+func pricingNumber(node map[string]interface{}, keys ...string) (float64, bool) {
+	for _, key := range keys {
+		raw, ok := node[key]
+		if !ok {
+			continue
+		}
+		switch v := raw.(type) {
+		case float64:
+			return v, true
+		case int64:
+			return float64(v), true
+		case int:
+			return float64(v), true
+		case string:
+			parsed, err := strconv.ParseFloat(v, 64)
+			if err == nil {
+				return parsed, true
+			}
+		}
+	}
+	return 0, false
+}
+
+func estimateCost(pricing map[string]interface{}, model string, promptTokens, completionTokens int64) float64 {
+	if pricing == nil || strings.TrimSpace(model) == "" {
+		return 0
+	}
+	candidates := []string{model}
+	if idx := strings.Index(model, "/"); idx >= 0 && idx+1 < len(model) {
+		candidates = append(candidates, model[idx+1:])
+	}
+	for _, key := range candidates {
+		raw, ok := pricing[key]
+		if !ok {
+			continue
+		}
+		entry, ok := raw.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		promptRate, _ := pricingNumber(entry, "prompt", "promptCostPer1k", "promptCostPer1K", "input", "inputCostPer1k", "inputCostPer1K")
+		completionRate, _ := pricingNumber(entry, "completion", "completionCostPer1k", "completionCostPer1K", "output", "outputCostPer1k", "outputCostPer1K")
+		cost := float64(promptTokens)/1000.0*promptRate + float64(completionTokens)/1000.0*completionRate
+		if cost < 0 {
+			return 0
+		}
+		return cost
+	}
+	return 0
 }
 
 func (s *Store) DBSnapshot() ([]byte, error) {

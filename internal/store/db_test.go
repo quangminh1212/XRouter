@@ -31,3 +31,17 @@ func TestGetCircuitBreakDuration(t *testing.T) {
 		t.Fatalf("expected 90s, got %s", got)
 	}
 }
+
+func TestEstimateCost(t *testing.T) {
+	pricing := map[string]interface{}{
+		"gpt-test": map[string]interface{}{
+			"promptCostPer1k":     0.002,
+			"completionCostPer1k": 0.004,
+		},
+	}
+	got := estimateCost(pricing, "openai/gpt-test", 500, 250)
+	want := 0.002
+	if got != want {
+		t.Fatalf("expected cost %v, got %v", want, got)
+	}
+}
