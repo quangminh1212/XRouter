@@ -53,7 +53,7 @@ Reference repos:
 - [x] Anthropic messages
 - [x] OpenAI responses
 - [ ] OpenAI legacy completions
-- [ ] Claude count tokens
+- [x] Claude count tokens
 - [ ] Gemini-compatible `v1beta/models/*action`
 - [ ] Responses compact variant
 - [ ] Responses websocket/stream alias
