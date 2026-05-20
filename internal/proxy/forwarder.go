@@ -106,6 +106,13 @@ func (f *Forwarder) Forward(ctx context.Context, path string, requestBody []byte
 	}
 
 	model := extractModel(body)
+	if model != "" {
+		forcedMappings := f.store.GetForcedModelMappings()
+		if target, ok := forcedMappings[model]; ok && strings.TrimSpace(target) != "" {
+			body["model"] = target
+			model = target
+		}
+	}
 	providerHint := ""
 	if strings.Contains(model, "/") {
 		providerHint = strings.SplitN(model, "/", 2)[0]

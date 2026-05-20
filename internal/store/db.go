@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 )
@@ -59,16 +60,17 @@ type DailySummary struct {
 }
 
 type Settings struct {
-	RequireAPIKey              bool   `json:"requireApiKey"`
-	RequireLogin               bool   `json:"requireLogin"`
-	StickyRoundRobinLimit      int    `json:"stickyRoundRobinLimit"`
-	ComboStrategy              string `json:"comboStrategy"`
-	ComboStickyRoundRobinLimit int    `json:"comboStickyRoundRobinLimit"`
-	OutboundProxyEnabled       bool   `json:"outboundProxyEnabled"`
-	OutboundProxyURL           string `json:"outboundProxyUrl"`
-	OutboundNoProxy            string `json:"outboundNoProxy"`
-	ObservabilityEnabled       bool   `json:"observabilityEnabled"`
-	ObservabilityMaxRecords    int    `json:"observabilityMaxRecords"`
+	RequireAPIKey              bool              `json:"requireApiKey"`
+	RequireLogin               bool              `json:"requireLogin"`
+	StickyRoundRobinLimit      int               `json:"stickyRoundRobinLimit"`
+	ComboStrategy              string            `json:"comboStrategy"`
+	ComboStickyRoundRobinLimit int               `json:"comboStickyRoundRobinLimit"`
+	OutboundProxyEnabled       bool              `json:"outboundProxyEnabled"`
+	OutboundProxyURL           string            `json:"outboundProxyUrl"`
+	OutboundNoProxy            string            `json:"outboundNoProxy"`
+	ObservabilityEnabled       bool              `json:"observabilityEnabled"`
+	ObservabilityMaxRecords    int               `json:"observabilityMaxRecords"`
+	ForcedModelMappings        map[string]string `json:"forcedModelMappings,omitempty"`
 }
 
 type DB struct {
@@ -145,6 +147,9 @@ func (s *Store) load() error {
 	if db.UsageData.DailySummary == nil {
 		db.UsageData.DailySummary = map[string]DailySummary{}
 	}
+	if db.Settings.ForcedModelMappings == nil {
+		db.Settings.ForcedModelMappings = map[string]string{}
+	}
 	s.db = db
 	s.rawRoot = root
 	s.loadedAt = time.Now()
@@ -155,10 +160,18 @@ func defaultDB() DB {
 	return DB{
 		ProviderConnections: []ProviderConnection{},
 		APIKeys:             []APIKey{},
-		Settings:            Settings{RequireLogin: true, StickyRoundRobinLimit: 3, ComboStrategy: "fallback", ComboStickyRoundRobinLimit: 1, ObservabilityEnabled: true, ObservabilityMaxRecords: 1000},
-		ModelAliases:        map[string]string{},
-		Pricing:             map[string]interface{}{},
-		UsageData:           UsageData{History: []UsageEntry{}, TotalRequestsLifetime: 0, DailySummary: map[string]DailySummary{}},
+		Settings: Settings{
+			RequireLogin:               true,
+			StickyRoundRobinLimit:      3,
+			ComboStrategy:              "fallback",
+			ComboStickyRoundRobinLimit: 1,
+			ObservabilityEnabled:       true,
+			ObservabilityMaxRecords:    1000,
+			ForcedModelMappings:        map[string]string{},
+		},
+		ModelAliases: map[string]string{},
+		Pricing:      map[string]interface{}{},
+		UsageData:    UsageData{History: []UsageEntry{}, TotalRequestsLifetime: 0, DailySummary: map[string]DailySummary{}},
 	}
 }
 
@@ -349,6 +362,85 @@ func (s *Store) GetModelAliases() map[string]string {
 		out[k] = v
 	}
 	return out
+}
+
+func sanitizeMappings(input map[string]string) map[string]string {
+	out := map[string]string{}
+	for source, target := range input {
+		k := strings.TrimSpace(source)
+		v := strings.TrimSpace(target)
+		if k == "" || v == "" || !strings.Contains(v, "/") {
+			continue
+		}
+		out[k] = v
+	}
+	return out
+}
+
+func (s *Store) GetForcedModelMappings() map[string]string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make(map[string]string, len(s.db.Settings.ForcedModelMappings))
+	for k, v := range s.db.Settings.ForcedModelMappings {
+		out[k] = v
+	}
+	return sanitizeMappings(out)
+}
+
+func (s *Store) ReplaceForcedModelMappings(mappings map[string]string) (map[string]string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.db.Settings.ForcedModelMappings = sanitizeMappings(mappings)
+	if err := s.persistLocked(); err != nil {
+		return nil, err
+	}
+	out := make(map[string]string, len(s.db.Settings.ForcedModelMappings))
+	for k, v := range s.db.Settings.ForcedModelMappings {
+		out[k] = v
+	}
+	return out, nil
+}
+
+func (s *Store) PatchForcedModelMappings(mappings map[string]string) (map[string]string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.db.Settings.ForcedModelMappings == nil {
+		s.db.Settings.ForcedModelMappings = map[string]string{}
+	}
+	for k, v := range sanitizeMappings(mappings) {
+		s.db.Settings.ForcedModelMappings[k] = v
+	}
+	if err := s.persistLocked(); err != nil {
+		return nil, err
+	}
+	out := make(map[string]string, len(s.db.Settings.ForcedModelMappings))
+	for k, v := range s.db.Settings.ForcedModelMappings {
+		out[k] = v
+	}
+	return out, nil
+}
+
+func (s *Store) DeleteForcedModelMappingKeys(keys []string) (map[string]string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.db.Settings.ForcedModelMappings == nil {
+		s.db.Settings.ForcedModelMappings = map[string]string{}
+	}
+	for _, key := range keys {
+		trimmed := strings.TrimSpace(key)
+		if trimmed == "" {
+			continue
+		}
+		delete(s.db.Settings.ForcedModelMappings, trimmed)
+	}
+	if err := s.persistLocked(); err != nil {
+		return nil, err
+	}
+	out := make(map[string]string, len(s.db.Settings.ForcedModelMappings))
+	for k, v := range s.db.Settings.ForcedModelMappings {
+		out[k] = v
+	}
+	return out, nil
 }
 
 func (s *Store) GetUsageSummary() map[string]interface{} {

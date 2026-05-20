@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"runtime"
+	"slices"
 	"strings"
 	"time"
 
@@ -47,6 +48,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/providers", s.handleProviders)
 	s.mux.HandleFunc("/api/providers/", s.handleProviderByID)
 	s.mux.HandleFunc("/api/models", s.handleModels)
+	s.mux.HandleFunc("/api/management/model-mappings", s.handleManagementModelMappings)
 	s.mux.HandleFunc("/api/quota", s.handleQuota)
 	s.mux.HandleFunc("/api/usage/summary", s.handleQuota)
 	s.mux.HandleFunc("/api/debug/db", s.handleDebugDB)
@@ -187,6 +189,86 @@ func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
 		models = append(models, map[string]string{"fullModel": model, "alias": alias})
 	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{"models": models})
+}
+
+func isLocalOnlyRequest(r *http.Request) bool {
+	hostCandidates := []string{
+		r.URL.Hostname(),
+		r.Host,
+		r.Header.Get("Host"),
+		r.Header.Get("X-Forwarded-Host"),
+	}
+	for _, raw := range hostCandidates {
+		host := strings.ToLower(strings.TrimSpace(raw))
+		if host == "" {
+			continue
+		}
+		host = strings.TrimPrefix(host, "[")
+		host = strings.TrimSuffix(host, "]")
+		if strings.Contains(host, ":") {
+			host = strings.Split(host, ":")[0]
+		}
+		if slices.Contains([]string{"localhost", "127.0.0.1", "::1"}, host) {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *Server) handleManagementModelMappings(w http.ResponseWriter, r *http.Request) {
+	if !isLocalOnlyRequest(r) {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "management api is restricted to localhost"})
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		writeJSON(w, http.StatusOK, map[string]interface{}{"mappings": s.store.GetForcedModelMappings()})
+	case http.MethodPut:
+		var body struct {
+			Mappings map[string]string `json:"mappings"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+			return
+		}
+		mappings, err := s.store.ReplaceForcedModelMappings(body.Mappings)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{"success": true, "mappings": mappings})
+	case http.MethodPatch:
+		var body struct {
+			Mappings map[string]string `json:"mappings"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+			return
+		}
+		mappings, err := s.store.PatchForcedModelMappings(body.Mappings)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{"success": true, "mappings": mappings})
+	case http.MethodDelete:
+		var body struct {
+			Aliases []string `json:"aliases"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil && err != io.EOF {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+			return
+		}
+		mappings, err := s.store.DeleteForcedModelMappingKeys(body.Aliases)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{"success": true, "mappings": mappings})
+	default:
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+	}
 }
 
 func (s *Server) handleQuota(w http.ResponseWriter, r *http.Request) {
