@@ -81,7 +81,7 @@ Reference repos:
 - [x] Basic settings patch
 - [x] Basic model mappings
 - [x] Basic quota/usage summary
-- [ ] Provider connection test endpoint
+- [x] Provider connection test endpoint
 - [ ] Provider model test endpoint
 - [ ] Provider credential validate endpoint
 - [ ] Usage request logs
@@ -575,6 +575,7 @@ Legend:
   - built-in routing exists directly (`openai`, `anthropic`, `openrouter`), or
   - the current code can already route a generic compatible provider class without adding a whole new provider-specific auth flow.
 - `NO` means XRouter still needs at least one of: provider adapter logic, auth onboarding flow, model normalization, dedicated endpoint support, or management UX/API.
+
 
 
 
