@@ -69,7 +69,7 @@ Reference repos:
 - [x] Speech-to-text
 - [x] Video generation
 - [x] Video edits/extensions/retrieve
-- [ ] Music/audio generation
+- [x] Music/audio generation
 - [ ] Web search endpoint
 - [x] Web fetch endpoint
 - [x] Voice listing endpoints
