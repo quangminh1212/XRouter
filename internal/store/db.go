@@ -171,6 +171,19 @@ type RoutePolicy struct {
 	UpdatedAt    string   `json:"updatedAt,omitempty"`
 }
 
+type MCPServer struct {
+	ID        string            `json:"id"`
+	Name      string            `json:"name"`
+	Transport string            `json:"transport,omitempty"`
+	Command   string            `json:"command,omitempty"`
+	URL       string            `json:"url,omitempty"`
+	Env       map[string]string `json:"env,omitempty"`
+	Headers   map[string]string `json:"headers,omitempty"`
+	Enabled   bool              `json:"enabled"`
+	CreatedAt string            `json:"createdAt,omitempty"`
+	UpdatedAt string            `json:"updatedAt,omitempty"`
+}
+
 type DailySummary struct {
 	Requests int64   `json:"requests"`
 	Cost     float64 `json:"cost"`
@@ -208,6 +221,7 @@ type DB struct {
 	ProviderNodes       []ProviderNode         `json:"providerNodes"`
 	ComboModels         []ComboModel           `json:"comboModels"`
 	RoutePolicies       []RoutePolicy          `json:"routePolicies"`
+	MCPServers          []MCPServer            `json:"mcpServers"`
 }
 
 type Store struct {
@@ -302,6 +316,9 @@ func (s *Store) load() error {
 	if db.RoutePolicies == nil {
 		db.RoutePolicies = []RoutePolicy{}
 	}
+	if db.MCPServers == nil {
+		db.MCPServers = []MCPServer{}
+	}
 	s.db = db
 	s.rawRoot = root
 	s.loadedAt = time.Now()
@@ -334,6 +351,7 @@ func defaultDB() DB {
 		ProviderNodes: []ProviderNode{},
 		ComboModels:   []ComboModel{},
 		RoutePolicies: []RoutePolicy{},
+		MCPServers:    []MCPServer{},
 	}
 }
 
@@ -439,6 +457,9 @@ func (s *Store) persistLocked() error {
 		return err
 	}
 	if s.rawRoot["routePolicies"], err = mustJSON(s.db.RoutePolicies); err != nil {
+		return err
+	}
+	if s.rawRoot["mcpServers"], err = mustJSON(s.db.MCPServers); err != nil {
 		return err
 	}
 	payload, err := json.MarshalIndent(s.rawRoot, "", "  ")
@@ -1304,6 +1325,90 @@ func (s *Store) DeleteRoutePolicy(id string) error {
 		return fmt.Errorf("route policy not found")
 	}
 	s.db.RoutePolicies = next
+	return s.persistLocked()
+}
+
+func (s *Store) ListMCPServers(includeDisabled bool) []MCPServer {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]MCPServer, 0, len(s.db.MCPServers))
+	for _, item := range s.db.MCPServers {
+		if !includeDisabled && !item.Enabled {
+			continue
+		}
+		clean := item
+		clean.Env = nil
+		clean.Headers = nil
+		out = append(out, clean)
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].CreatedAt > out[j].CreatedAt })
+	return out
+}
+
+func (s *Store) CreateMCPServer(item MCPServer) (MCPServer, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := time.Now().UTC().Format(time.RFC3339)
+	item.ID = randID("mcp_")
+	item.Name = strings.TrimSpace(item.Name)
+	item.Transport = strings.ToLower(strings.TrimSpace(item.Transport))
+	item.Command = strings.TrimSpace(item.Command)
+	item.URL = strings.TrimSpace(item.URL)
+	item.CreatedAt = now
+	item.UpdatedAt = now
+	s.db.MCPServers = append(s.db.MCPServers, item)
+	return item, s.persistLocked()
+}
+
+func (s *Store) UpdateMCPServer(id string, patch map[string]interface{}) (MCPServer, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	idx := -1
+	for i, item := range s.db.MCPServers {
+		if item.ID == id {
+			idx = i
+			break
+		}
+	}
+	if idx < 0 {
+		return MCPServer{}, fmt.Errorf("mcp server not found")
+	}
+	raw, _ := json.Marshal(s.db.MCPServers[idx])
+	merged := map[string]interface{}{}
+	_ = json.Unmarshal(raw, &merged)
+	for k, v := range patch {
+		merged[k] = v
+	}
+	merged["updatedAt"] = time.Now().UTC().Format(time.RFC3339)
+	nextRaw, _ := json.Marshal(merged)
+	var next MCPServer
+	if err := json.Unmarshal(nextRaw, &next); err != nil {
+		return MCPServer{}, err
+	}
+	next.Name = strings.TrimSpace(next.Name)
+	next.Transport = strings.ToLower(strings.TrimSpace(next.Transport))
+	next.Command = strings.TrimSpace(next.Command)
+	next.URL = strings.TrimSpace(next.URL)
+	s.db.MCPServers[idx] = next
+	return next, s.persistLocked()
+}
+
+func (s *Store) DeleteMCPServer(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	next := s.db.MCPServers[:0]
+	found := false
+	for _, item := range s.db.MCPServers {
+		if item.ID == id {
+			found = true
+			continue
+		}
+		next = append(next, item)
+	}
+	if !found {
+		return fmt.Errorf("mcp server not found")
+	}
+	s.db.MCPServers = next
 	return s.persistLocked()
 }
 
