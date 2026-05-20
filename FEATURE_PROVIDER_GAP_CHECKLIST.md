@@ -90,7 +90,7 @@ Reference repos:
 - [x] Usage chart/stats stream
 - [x] Request detail endpoint
 - [x] Model alias management
-- [ ] Disabled model management
+- [x] Disabled model management
 - [ ] Model availability checks
 - [ ] Routing strategy management
 - [ ] Retry/max retry interval management
@@ -171,7 +171,7 @@ Reference repos:
 - [ ] Add account pool management and richer round-robin/fallback strategies
 - [ ] Add model alias / disabled / availability management
   - [x] Model alias management
-  - [ ] Disabled model management
+  - [x] Disabled model management
   - [ ] Model availability management
 - [ ] Add CLI-compatible aliases and advanced response variants
 
