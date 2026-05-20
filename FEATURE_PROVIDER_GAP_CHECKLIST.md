@@ -96,7 +96,7 @@ Reference repos:
 - [x] Retry/max retry interval management
 - [x] OAuth excluded models / model alias controls
 - [x] Auth file upload/download/index flows
-- [ ] Vertex credential import flow
+- [x] Vertex credential import flow
 - [ ] Proxy pools / upstream pool manager
 - [ ] Provider nodes / compatible node manager
 
