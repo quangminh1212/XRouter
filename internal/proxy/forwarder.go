@@ -255,6 +255,203 @@ func getCircuitOpenDuration(failures int) time.Duration {
 	}
 }
 
+type SearchRequest struct {
+	Query        string `json:"query"`
+	MaxResults   int    `json:"maxResults,omitempty"`
+	ProviderHint string `json:"provider,omitempty"`
+}
+
+type SearchResult struct {
+	Title   string `json:"title,omitempty"`
+	URL     string `json:"url,omitempty"`
+	Snippet string `json:"snippet,omitempty"`
+}
+
+type SearchResponse struct {
+	Provider string         `json:"provider,omitempty"`
+	Query    string         `json:"query"`
+	Results  []SearchResult `json:"results"`
+	Raw      interface{}    `json:"raw,omitempty"`
+}
+
+func (f *Forwarder) Search(ctx context.Context, request SearchRequest) (SearchResponse, error) {
+	if err := f.refreshTransport(); err != nil {
+		return SearchResponse{}, err
+	}
+	query := strings.TrimSpace(request.Query)
+	if query == "" {
+		return SearchResponse{}, fmt.Errorf("query is required")
+	}
+	if request.MaxResults <= 0 {
+		request.MaxResults = 5
+	}
+	if request.MaxResults > 20 {
+		request.MaxResults = 20
+	}
+	candidates := f.store.GetActiveConnections(strings.TrimSpace(request.ProviderHint))
+	if len(candidates) == 0 && strings.TrimSpace(request.ProviderHint) != "" {
+		candidates = f.store.GetActiveConnections("")
+	}
+	filtered := make([]store.ProviderConnection, 0, len(candidates))
+	for _, c := range candidates {
+		if entry, ok := store.GetProviderCatalogEntry(c.Provider); ok && entry.APIType == "search" {
+			filtered = append(filtered, c)
+		}
+	}
+	if len(filtered) == 0 {
+		return SearchResponse{}, fmt.Errorf("no active search provider connections")
+	}
+	var lastErr error
+	for _, c := range filtered {
+		result, err := f.searchWithConnection(ctx, c, query, request.MaxResults)
+		if err == nil {
+			return result, nil
+		}
+		lastErr = err
+		if !strings.HasPrefix(err.Error(), "upstream ") {
+			_ = f.store.MarkConnectionCooldown(c.ID, time.Now().Add(getCircuitOpenDuration(c.ConsecutiveFailures+1)), 0, err.Error())
+		}
+	}
+	if lastErr == nil {
+		lastErr = fmt.Errorf("all search providers failed")
+	}
+	return SearchResponse{}, lastErr
+}
+
+func (f *Forwarder) searchWithConnection(ctx context.Context, c store.ProviderConnection, query string, maxResults int) (SearchResponse, error) {
+	entry, ok := store.GetProviderCatalogEntry(c.Provider)
+	if !ok || entry.APIType != "search" {
+		return SearchResponse{}, fmt.Errorf("provider %s is not a search provider", c.Provider)
+	}
+	baseURL := strings.TrimRight(entry.BaseURL, "/")
+	if c.ProviderSpecificData != nil {
+		if v, ok := c.ProviderSpecificData["baseUrl"].(string); ok && strings.TrimSpace(v) != "" {
+			baseURL = strings.TrimRight(strings.TrimSpace(v), "/")
+		}
+	}
+	req, err := buildSearchRequest(ctx, c, baseURL, query, maxResults)
+	if err != nil {
+		return SearchResponse{}, err
+	}
+	resp, err := f.client.Do(req)
+	if err != nil {
+		return SearchResponse{}, err
+	}
+	defer resp.Body.Close()
+	rawBody, err := io.ReadAll(io.LimitReader(resp.Body, 8*1024*1024))
+	if err != nil {
+		return SearchResponse{}, err
+	}
+	if resp.StatusCode == 429 || resp.StatusCode >= 500 {
+		until, ok := parseRateLimitReset(resp.Header, time.Now())
+		if !ok {
+			until = time.Now().Add(getFallbackCooldown(resp.StatusCode))
+		}
+		_ = f.store.MarkConnectionCooldown(c.ID, until, resp.StatusCode, string(rawBody))
+		return SearchResponse{}, fmt.Errorf("upstream %s status %d", c.Provider, resp.StatusCode)
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return SearchResponse{}, fmt.Errorf("upstream %s status %d", c.Provider, resp.StatusCode)
+	}
+	var raw interface{}
+	_ = json.Unmarshal(rawBody, &raw)
+	results := normalizeSearchResults(c.Provider, raw)
+	if len(results) > maxResults {
+		results = results[:maxResults]
+	}
+	if c.RateLimitedUntil != "" || c.CircuitOpenUntil != "" || c.TestStatus == "unavailable" || c.BackoffLevel > 0 || c.ConsecutiveFailures > 0 {
+		_ = f.store.ClearConnectionCooldown(c.ID)
+	}
+	return SearchResponse{Provider: c.Provider, Query: query, Results: results, Raw: raw}, nil
+}
+
+func buildSearchRequest(ctx context.Context, c store.ProviderConnection, baseURL, query string, maxResults int) (*http.Request, error) {
+	switch c.Provider {
+	case "brave-search":
+		u, err := url.Parse(baseURL + "/web/search")
+		if err != nil {
+			return nil, err
+		}
+		q := u.Query()
+		q.Set("q", query)
+		q.Set("count", strconv.Itoa(maxResults))
+		u.RawQuery = q.Encode()
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Accept", "application/json")
+		req.Header.Set("X-Subscription-Token", c.APIKey)
+		return req, nil
+	case "serper":
+		req, err := postJSONSearch(ctx, baseURL+"/search", c, map[string]interface{}{"q": query, "num": maxResults})
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Del("Authorization")
+		req.Header.Set("X-API-KEY", c.APIKey)
+		return req, nil
+	case "tavily":
+		return postJSONSearch(ctx, baseURL+"/search", c, map[string]interface{}{"query": query, "max_results": maxResults})
+	case "exa":
+		return postJSONSearch(ctx, baseURL+"/search", c, map[string]interface{}{"query": query, "numResults": maxResults})
+	case "perplexity-search":
+		return postJSONSearch(ctx, baseURL+"/search", c, map[string]interface{}{"query": query, "max_results": maxResults})
+	default:
+		return nil, fmt.Errorf("search provider %s not supported", c.Provider)
+	}
+}
+
+func postJSONSearch(ctx context.Context, endpoint string, c store.ProviderConnection, body map[string]interface{}) (*http.Request, error) {
+	raw, _ := json.Marshal(body)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(raw))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+	setAuthHeader(req, c, "openai")
+	return req, nil
+}
+
+func normalizeSearchResults(provider string, raw interface{}) []SearchResult {
+	root, ok := raw.(map[string]interface{})
+	if !ok {
+		return nil
+	}
+	switch provider {
+	case "brave-search":
+		if web, ok := root["web"].(map[string]interface{}); ok {
+			return normalizeResultArray(web["results"], "title", "url", "description")
+		}
+	case "serper":
+		return normalizeResultArray(root["organic"], "title", "link", "snippet")
+	case "tavily", "exa", "perplexity-search":
+		return normalizeResultArray(root["results"], "title", "url", "content")
+	}
+	return nil
+}
+
+func normalizeResultArray(raw interface{}, titleKey, urlKey, snippetKey string) []SearchResult {
+	items, ok := raw.([]interface{})
+	if !ok {
+		return nil
+	}
+	results := make([]SearchResult, 0, len(items))
+	for _, item := range items {
+		node, ok := item.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		results = append(results, SearchResult{
+			Title:   fmt.Sprint(node[titleKey]),
+			URL:     fmt.Sprint(node[urlKey]),
+			Snippet: fmt.Sprint(node[snippetKey]),
+		})
+	}
+	return results
+}
+
 func (f *Forwarder) Forward(ctx context.Context, scope, path string, requestBody []byte) (*http.Response, error) {
 	if err := f.refreshTransport(); err != nil {
 		return nil, err

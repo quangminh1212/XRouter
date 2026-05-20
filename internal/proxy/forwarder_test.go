@@ -77,3 +77,37 @@ func TestNormalizeModelForWave1Provider(t *testing.T) {
 		t.Fatalf("unexpected normalized body: %s", raw)
 	}
 }
+
+func TestNormalizeSearchResultsBrave(t *testing.T) {
+	raw := map[string]interface{}{
+		"web": map[string]interface{}{
+			"results": []interface{}{
+				map[string]interface{}{
+					"title":       "OpenAI",
+					"url":         "https://openai.com",
+					"description": "AI research and deployment company",
+				},
+			},
+		},
+	}
+	out := normalizeSearchResults("brave-search", raw)
+	if len(out) != 1 || out[0].Title != "OpenAI" || out[0].URL != "https://openai.com" {
+		t.Fatalf("unexpected normalize output: %#v", out)
+	}
+}
+
+func TestNormalizeSearchResultsSerper(t *testing.T) {
+	raw := map[string]interface{}{
+		"organic": []interface{}{
+			map[string]interface{}{
+				"title":   "Serper",
+				"link":    "https://serper.dev",
+				"snippet": "Google Search API",
+			},
+		},
+	}
+	out := normalizeSearchResults("serper", raw)
+	if len(out) != 1 || out[0].Title != "Serper" || out[0].URL != "https://serper.dev" {
+		t.Fatalf("unexpected normalize output: %#v", out)
+	}
+}

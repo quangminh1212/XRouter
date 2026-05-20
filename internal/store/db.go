@@ -37,6 +37,11 @@ var providerCatalog = map[string]ProviderCatalogEntry{
 	"vercel-ai-gateway": {Provider: "vercel-ai-gateway", APIType: "openai", BaseURL: "https://ai-gateway.vercel.sh/v1", FallbackModels: []string{"vercel-ai-gateway/openai/gpt-4o-mini"}},
 	"cohere":            {Provider: "cohere", APIType: "openai", BaseURL: "https://api.cohere.com/compatibility/v1", FallbackModels: []string{"cohere/command-r-plus"}},
 	"perplexity":        {Provider: "perplexity", APIType: "openai", BaseURL: "https://api.perplexity.ai", FallbackModels: []string{"perplexity/sonar-pro"}},
+	"brave-search":      {Provider: "brave-search", APIType: "search", BaseURL: "https://api.search.brave.com/res/v1"},
+	"serper":            {Provider: "serper", APIType: "search", BaseURL: "https://google.serper.dev"},
+	"tavily":            {Provider: "tavily", APIType: "search", BaseURL: "https://api.tavily.com"},
+	"exa":               {Provider: "exa", APIType: "search", BaseURL: "https://api.exa.ai"},
+	"perplexity-search": {Provider: "perplexity-search", APIType: "search", BaseURL: "https://api.perplexity.ai"},
 }
 
 type ProviderConnection struct {

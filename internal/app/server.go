@@ -74,6 +74,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/v1/chat/completions", s.handleProxy)
 	s.mux.HandleFunc("/v1/messages", s.handleProxy)
 	s.mux.HandleFunc("/v1/responses", s.handleProxy)
+	s.mux.HandleFunc("/v1/search", s.handleSearch)
 	s.mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]interface{}{"name": "xrouter", "status": "ok", "uptimeSec": int(time.Since(s.startedAt).Seconds())})
 	})
@@ -672,6 +673,34 @@ func (s *Server) handleProxy(w http.ResponseWriter, r *http.Request) {
 	if usageEntry, ok := extractUsageEntry(rawResp, provider, model); ok {
 		_ = s.store.RecordUsage(usageEntry)
 	}
+}
+
+func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	apiKey, err := s.authorize(r)
+	if err != nil {
+		if strings.Contains(err.Error(), "rate limit exceeded") {
+			writeJSON(w, http.StatusTooManyRequests, map[string]string{"error": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": err.Error()})
+		return
+	}
+	var body proxy.SearchRequest
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1*1024*1024)).Decode(&body); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return
+	}
+	result, err := s.forwarder.Search(r.Context(), body)
+	if err != nil {
+		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+		return
+	}
+	_ = apiKey
+	writeJSON(w, http.StatusOK, result)
 }
 
 func asInt64(v interface{}) (int64, bool) {
