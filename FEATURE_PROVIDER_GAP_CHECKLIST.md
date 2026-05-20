@@ -185,6 +185,19 @@ Reference repos:
 - [x] Add A2A support
 - [x] Add tunnel / remote access helpers
 
+## Regression Matrix Coverage
+
+- [x] `openai` -> `POST /v1/chat/completions`
+- [x] `openai` -> `POST /v1/completions`
+- [x] `openai`/responses -> `POST /v1/responses`
+- [x] `anthropic-compatible` -> adapter `POST /v1/chat/completions` => `/v1/messages`
+- [x] `gemini-compatible` -> adapter `POST /v1/chat/completions` => `/v1beta/models/*:generateContent`
+- [x] Wave 1 smoke: `deepseek` chat proxy
+- [x] Media smoke: embeddings / audio speech / audio transcriptions
+- [x] OAuth start smoke: `claude`, `gemini`, `antigravity`, `kimi`, `github`, `xai`
+- [x] Realtime observability: `GET /api/usage/stream`
+- [x] Local dashboard render: `GET /dashboard`
+
 ## Top 30 Provider Implementation Priority
 
 Scoring formula: `(repos_count * 2) + impact_boost - (difficulty * 0.5)`
