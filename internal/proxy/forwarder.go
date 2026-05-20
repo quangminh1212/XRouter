@@ -276,6 +276,13 @@ func getCircuitOpenDuration(failures int) time.Duration {
 	}
 }
 
+func maxForwardAttempts(settings store.Settings) int {
+	if settings.MaxRetries <= 0 {
+		return 3
+	}
+	return settings.MaxRetries
+}
+
 type SearchRequest struct {
 	Query        string `json:"query"`
 	MaxResults   int    `json:"maxResults,omitempty"`
@@ -352,8 +359,14 @@ func (f *Forwarder) Search(ctx context.Context, request SearchRequest) (SearchRe
 	if len(filtered) == 0 {
 		return SearchResponse{}, fmt.Errorf("no active search provider connections")
 	}
+	maxAttempts := maxForwardAttempts(f.store.GetSettings())
+	attempts := 0
 	var lastErr error
 	for _, c := range filtered {
+		if attempts >= maxAttempts {
+			break
+		}
+		attempts++
 		result, err := f.searchWithConnection(ctx, c, query, request.MaxResults)
 		if err == nil {
 			return result, nil
@@ -943,8 +956,14 @@ func (f *Forwarder) ForwardMedia(ctx context.Context, request MediaRequest) (*ht
 	if len(filtered) == 0 {
 		return nil, fmt.Errorf("no active %s provider connections", apiType)
 	}
+	maxAttempts := maxForwardAttempts(f.store.GetSettings())
+	attempts := 0
 	var lastErr error
 	for _, c := range filtered {
+		if attempts >= maxAttempts {
+			break
+		}
+		attempts++
 		resp, err := f.forwardMediaWithConnection(ctx, c, request, apiType)
 		if err == nil {
 			return resp, nil
@@ -1082,6 +1101,8 @@ func (f *Forwarder) Forward(ctx context.Context, scope, path string, requestBody
 	if len(candidates) == 0 {
 		return nil, fmt.Errorf("no active provider connections")
 	}
+	maxAttempts := maxForwardAttempts(f.store.GetSettings())
+	attempts := 0
 
 	upstreamBody := normalizeModelForUpstream(body, providerHint)
 	if !isStreaming(body) {
@@ -1091,6 +1112,10 @@ func (f *Forwarder) Forward(ctx context.Context, scope, path string, requestBody
 	}
 	var lastErr error
 	for _, c := range candidates {
+		if attempts >= maxAttempts {
+			break
+		}
+		attempts++
 		if updated, err := f.maybeRefreshOAuthConnection(ctx, c); err == nil {
 			c = updated
 		}
@@ -1242,11 +1267,17 @@ func (f *Forwarder) forwardDirect(ctx context.Context, path string, upstreamBody
 	if len(candidates) == 0 {
 		return nil, fmt.Errorf("no active provider connections")
 	}
+	maxAttempts := maxForwardAttempts(f.store.GetSettings())
+	attempts := 0
 
 	var body map[string]interface{}
 	_ = json.Unmarshal(upstreamBody, &body)
 	var lastErr error
 	for _, c := range candidates {
+		if attempts >= maxAttempts {
+			break
+		}
+		attempts++
 		endpoint, mode, err := resolveEndpoint(c, model, path)
 		if err != nil {
 			lastErr = err

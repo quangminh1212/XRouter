@@ -92,6 +92,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/management/disabled-models", s.handleManagementDisabledModels)
 	s.mux.HandleFunc("/api/management/model-availability", s.handleManagementModelAvailability)
 	s.mux.HandleFunc("/api/management/routing-strategy", s.handleManagementRoutingStrategy)
+	s.mux.HandleFunc("/api/management/retry-config", s.handleManagementRetryConfig)
 	s.mux.HandleFunc("/api/quota", s.handleQuota)
 	s.mux.HandleFunc("/api/usage/summary", s.handleQuota)
 	s.mux.HandleFunc("/api/usage/stats", s.handleUsageStats)
@@ -1281,6 +1282,57 @@ func (s *Server) handleManagementRoutingStrategy(w http.ResponseWriter, r *http.
 			"comboStrategy":              settings.ComboStrategy,
 			"stickyRoundRobinLimit":      settings.StickyRoundRobinLimit,
 			"comboStickyRoundRobinLimit": settings.ComboStickyRoundRobinLimit,
+		})
+	default:
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+	}
+}
+
+func (s *Server) handleManagementRetryConfig(w http.ResponseWriter, r *http.Request) {
+	if !isLocalOnlyRequest(r) {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "management api is restricted to localhost"})
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		settings := s.store.GetSettings()
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"maxRetries":         settings.MaxRetries,
+			"maxCooldownSeconds": settings.MaxCooldownSeconds,
+		})
+	case http.MethodPut, http.MethodPatch:
+		var body struct {
+			MaxRetries         *int `json:"maxRetries"`
+			MaxCooldownSeconds *int `json:"maxCooldownSeconds"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+			return
+		}
+		patch := map[string]interface{}{}
+		if body.MaxRetries != nil {
+			if *body.MaxRetries < 0 {
+				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "maxRetries must be >= 0"})
+				return
+			}
+			patch["maxRetries"] = *body.MaxRetries
+		}
+		if body.MaxCooldownSeconds != nil {
+			if *body.MaxCooldownSeconds < 0 {
+				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "maxCooldownSeconds must be >= 0"})
+				return
+			}
+			patch["maxCooldownSeconds"] = *body.MaxCooldownSeconds
+		}
+		settings, err := s.store.UpdateSettings(patch)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"maxRetries":         settings.MaxRetries,
+			"maxCooldownSeconds": settings.MaxCooldownSeconds,
 		})
 	default:
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})

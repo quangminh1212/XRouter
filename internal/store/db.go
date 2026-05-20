@@ -141,6 +141,8 @@ type Settings struct {
 	ForcedModelMappings        map[string]string `json:"forcedModelMappings,omitempty"`
 	DisabledModels             []string          `json:"disabledModels,omitempty"`
 	ModelAvailability          map[string]string `json:"modelAvailability,omitempty"`
+	MaxRetries                 int               `json:"maxRetries,omitempty"`
+	MaxCooldownSeconds         int               `json:"maxCooldownSeconds,omitempty"`
 	DefaultRequestsPerMinute   int               `json:"defaultRequestsPerMinute,omitempty"`
 }
 
@@ -251,6 +253,8 @@ func defaultDB() DB {
 			ForcedModelMappings:        map[string]string{},
 			DisabledModels:             []string{},
 			ModelAvailability:          map[string]string{},
+			MaxRetries:                 0,
+			MaxCooldownSeconds:         90,
 		},
 		ModelAliases: map[string]string{},
 		Pricing:      map[string]interface{}{},
@@ -416,6 +420,7 @@ func (s *Store) GetActiveConnections(provider string) []ProviderConnection {
 func (s *Store) MarkConnectionCooldown(id string, until time.Time, status int, message string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	until = clampCooldownUntil(time.Now().UTC(), until, s.db.Settings.MaxCooldownSeconds)
 	for i := range s.db.ProviderConnections {
 		if s.db.ProviderConnections[i].ID != id {
 			continue
@@ -427,13 +432,26 @@ func (s *Store) MarkConnectionCooldown(id string, until time.Time, status int, m
 		s.db.ProviderConnections[i].ErrorCode = status
 		s.db.ProviderConnections[i].TestStatus = "unavailable"
 		if shouldOpenCircuit(status, s.db.ProviderConnections[i].ConsecutiveFailures) {
-			s.db.ProviderConnections[i].CircuitOpenUntil = until.UTC().Add(getCircuitBreakDuration(s.db.ProviderConnections[i].ConsecutiveFailures)).Format(time.RFC3339)
+			circuitUntil := until.UTC().Add(getCircuitBreakDuration(s.db.ProviderConnections[i].ConsecutiveFailures))
+			circuitUntil = clampCooldownUntil(time.Now().UTC(), circuitUntil, s.db.Settings.MaxCooldownSeconds)
+			s.db.ProviderConnections[i].CircuitOpenUntil = circuitUntil.Format(time.RFC3339)
 			s.db.ProviderConnections[i].TestStatus = "circuit-open"
 		}
 		s.db.ProviderConnections[i].UpdatedAt = time.Now().UTC().Format(time.RFC3339)
 		return s.persistLocked()
 	}
 	return fmt.Errorf("provider connection not found")
+}
+
+func clampCooldownUntil(now, until time.Time, maxSeconds int) time.Time {
+	if maxSeconds <= 0 {
+		return until
+	}
+	maxUntil := now.Add(time.Duration(maxSeconds) * time.Second)
+	if until.After(maxUntil) {
+		return maxUntil
+	}
+	return until
 }
 
 func (s *Store) ClearConnectionCooldown(id string) error {
