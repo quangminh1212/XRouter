@@ -92,7 +92,7 @@ Reference repos:
 - [x] Model alias management
 - [x] Disabled model management
 - [x] Model availability checks
-- [ ] Routing strategy management
+- [x] Routing strategy management
 - [ ] Retry/max retry interval management
 - [ ] OAuth excluded models / model alias controls
 - [ ] Auth file upload/download/index flows
