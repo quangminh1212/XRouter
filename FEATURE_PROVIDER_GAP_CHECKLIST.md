@@ -57,7 +57,7 @@ Reference repos:
 - [ ] Gemini-compatible `v1beta/models/*action`
 - [x] Responses compact variant
 - [ ] Responses websocket/stream alias
-- [ ] Codex direct alias routes such as `/backend-api/codex/responses`
+- [x] Codex direct alias routes such as `/backend-api/codex/responses`
 
 ### 2) Media and non-chat endpoints
 
