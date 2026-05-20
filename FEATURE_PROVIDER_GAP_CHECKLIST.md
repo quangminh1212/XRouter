@@ -84,7 +84,7 @@ Reference repos:
 - [x] Provider connection test endpoint
 - [x] Provider model test endpoint
 - [x] Provider models endpoint
-- [ ] Provider credential validate endpoint
+- [x] Provider credential validate endpoint
 - [ ] Usage request logs
 - [ ] Usage history endpoint
 - [ ] Usage chart/stats stream
@@ -161,7 +161,7 @@ Reference repos:
 - [ ] Add `POST /v1/audio/speech`
 - [ ] Add `POST /v1/audio/transcriptions`
 - [x] Add `POST /v1/search`
-- [ ] Add provider validate/test/models endpoints
+- [x] Add provider validate/test/models endpoints
 - [x] Add `GET /api/providers/{id}/models`
 - [ ] Add detailed per-request usage logs
 
