@@ -255,9 +255,21 @@ func TestWave3ChatCompletionsProxySuccess(t *testing.T) {
 		upstream string
 	}{
 		{provider: "glm-cn", model: "glm-cn/glm-4.7", upstream: "glm-4.7"},
+		{provider: "minimax-cn", model: "minimax-cn/MiniMax-Text-01", upstream: "MiniMax-Text-01"},
 		{provider: "moonshot", model: "moonshot/moonshot-v1-8k", upstream: "moonshot-v1-8k"},
 		{provider: "hyperbolic", model: "hyperbolic/meta-llama/Meta-Llama-3.1-70B-Instruct", upstream: "meta-llama/Meta-Llama-3.1-70B-Instruct"},
+		{provider: "novita", model: "novita/deepseek/deepseek-v3", upstream: "deepseek/deepseek-v3"},
+		{provider: "sambanova", model: "sambanova/Meta-Llama-3.1-70B-Instruct", upstream: "Meta-Llama-3.1-70B-Instruct"},
+		{provider: "chutes", model: "chutes/deepseek-ai/DeepSeek-V3-0324", upstream: "deepseek-ai/DeepSeek-V3-0324"},
+		{provider: "lambda-ai", model: "lambda-ai/hermes-3-llama-3.1-405b-fp8", upstream: "hermes-3-llama-3.1-405b-fp8"},
+		{provider: "featherless-ai", model: "featherless-ai/Qwen/Qwen2.5-Coder-32B-Instruct", upstream: "Qwen/Qwen2.5-Coder-32B-Instruct"},
+		{provider: "kluster", model: "kluster/meta-llama/Meta-Llama-3.1-70B-Instruct", upstream: "meta-llama/Meta-Llama-3.1-70B-Instruct"},
+		{provider: "reka", model: "reka/reka-core", upstream: "reka-core"},
+		{provider: "zai", model: "zai/glm-4.7", upstream: "glm-4.7"},
 		{provider: "opencode", model: "opencode/gpt-4o-mini", upstream: "gpt-4o-mini"},
+		{provider: "opencode-go", model: "opencode-go/gpt-4o-mini", upstream: "gpt-4o-mini"},
+		{provider: "opencode-zen", model: "opencode-zen/gpt-4o-mini", upstream: "gpt-4o-mini"},
+		{provider: "kiro", model: "kiro/kiro-pro", upstream: "kiro-pro"},
 		{provider: "qwen", model: "qwen/qwen-plus", upstream: "qwen-plus"},
 	}
 	for _, tt := range tests {
