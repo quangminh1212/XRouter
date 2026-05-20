@@ -471,6 +471,10 @@ func (s *Server) handleOAuthProviderImport(w http.ResponseWriter, r *http.Reques
 		s.handleOAuthProviderRefresh(w, r)
 		return
 	}
+	if strings.HasSuffix(path, "/import-file") {
+		s.handleVertexCredentialImport(w, r)
+		return
+	}
 	if !isLocalOnlyRequest(r) {
 		writeJSON(w, http.StatusForbidden, map[string]string{"error": "oauth provider management is restricted to localhost"})
 		return
@@ -666,6 +670,84 @@ func (s *Server) handleOAuthProviderRefresh(w http.ResponseWriter, r *http.Reque
 		"tokenType":   result.TokenType,
 		"tokenExpiry": result.TokenExpiry,
 	})
+}
+
+func (s *Server) handleVertexCredentialImport(w http.ResponseWriter, r *http.Request) {
+	if !isLocalOnlyRequest(r) {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "oauth provider management is restricted to localhost"})
+		return
+	}
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	suffix := strings.TrimPrefix(r.URL.Path, "/api/oauth/providers/")
+	provider := strings.TrimSuffix(strings.TrimSpace(suffix), "/import-file")
+	if !strings.HasSuffix(suffix, "/import-file") || provider != "vertex" {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
+		return
+	}
+	var body struct {
+		Name         string `json:"name"`
+		AuthFileID   string `json:"authFileId"`
+		DefaultModel string `json:"defaultModel"`
+		ProjectID    string `json:"projectId"`
+		Location     string `json:"location"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return
+	}
+	authFile, ok := s.store.GetAuthFile(strings.TrimSpace(body.AuthFileID))
+	if !ok {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "auth file not found"})
+		return
+	}
+	decoded, err := base64.StdEncoding.DecodeString(authFile.ContentB64)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "auth file content is invalid"})
+		return
+	}
+	var creds map[string]interface{}
+	if err := json.Unmarshal(decoded, &creds); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "auth file must contain JSON credentials"})
+		return
+	}
+	projectID := strings.TrimSpace(body.ProjectID)
+	if projectID == "" {
+		if raw, ok := creds["project_id"].(string); ok {
+			projectID = strings.TrimSpace(raw)
+		}
+	}
+	location := strings.TrimSpace(body.Location)
+	if location == "" {
+		location = "us-central1"
+	}
+	if projectID == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "projectId is required"})
+		return
+	}
+	name := strings.TrimSpace(body.Name)
+	if name == "" {
+		name = "vertex oauth"
+	}
+	created, err := s.store.CreateProviderConnection(store.ProviderConnection{
+		Provider:     "vertex",
+		Name:         name,
+		AuthType:     "oauth",
+		IsActive:     true,
+		DefaultModel: strings.TrimSpace(body.DefaultModel),
+		ProviderSpecificData: map[string]interface{}{
+			"authFileId": strings.TrimSpace(body.AuthFileID),
+			"projectId":  projectID,
+			"location":   location,
+		},
+	})
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusCreated, created)
 }
 
 func randomHex(n int) string {
