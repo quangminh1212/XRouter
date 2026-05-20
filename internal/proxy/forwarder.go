@@ -293,6 +293,7 @@ type MediaRequest struct {
 
 type ProbeResult struct {
 	Provider   string `json:"provider"`
+	Model      string `json:"model,omitempty"`
 	Healthy    bool   `json:"healthy"`
 	StatusCode int    `json:"statusCode,omitempty"`
 	Message    string `json:"message,omitempty"`
@@ -524,6 +525,7 @@ func (f *Forwarder) ProbeConnection(ctx context.Context, c store.ProviderConnect
 	}
 	result := ProbeResult{
 		Provider:   c.Provider,
+		Model:      strings.TrimSpace(c.DefaultModel),
 		Healthy:    healthy,
 		StatusCode: resp.StatusCode,
 		Message:    msg,
@@ -533,6 +535,66 @@ func (f *Forwarder) ProbeConnection(ctx context.Context, c store.ProviderConnect
 		return result, fmt.Errorf("provider probe failed: %s", msg)
 	}
 	return result, nil
+}
+
+func (f *Forwarder) ProbeModels(ctx context.Context, c store.ProviderConnection, models []string) ([]ProbeResult, error) {
+	if err := f.refreshTransport(); err != nil {
+		return nil, err
+	}
+	if len(models) == 0 {
+		if strings.TrimSpace(c.DefaultModel) != "" {
+			models = []string{strings.TrimSpace(c.DefaultModel)}
+		} else {
+			return nil, fmt.Errorf("models are required")
+		}
+	}
+	entry, ok := store.GetProviderCatalogEntry(c.Provider)
+	if !ok {
+		return nil, fmt.Errorf("unknown provider %s", c.Provider)
+	}
+	baseURL := strings.TrimRight(entry.BaseURL, "/")
+	if c.ProviderSpecificData != nil {
+		if v, ok := c.ProviderSpecificData["baseUrl"].(string); ok && strings.TrimSpace(v) != "" {
+			baseURL = strings.TrimRight(strings.TrimSpace(v), "/")
+		}
+	}
+	results := make([]ProbeResult, 0, len(models))
+	for _, model := range models {
+		targetURL, method, body := probeRequestForProvider(entry, baseURL, model)
+		start := time.Now()
+		req, err := http.NewRequestWithContext(ctx, method, targetURL, bytes.NewReader(body))
+		if err != nil {
+			results = append(results, ProbeResult{Provider: c.Provider, Model: model, Healthy: false, Message: err.Error()})
+			continue
+		}
+		if len(body) > 0 {
+			req.Header.Set("Content-Type", "application/json")
+		}
+		req.Header.Set("Accept", "application/json")
+		setAuthHeader(req, c, entry.APIType)
+		resp, err := f.client.Do(req)
+		latency := time.Since(start).Milliseconds()
+		if err != nil {
+			results = append(results, ProbeResult{Provider: c.Provider, Model: model, Healthy: false, Message: err.Error(), LatencyMs: latency})
+			continue
+		}
+		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1*1024*1024))
+		_ = resp.Body.Close()
+		healthy := resp.StatusCode >= 200 && resp.StatusCode < 300
+		msg := ""
+		if !healthy {
+			msg = fmt.Sprintf("status %d", resp.StatusCode)
+		}
+		results = append(results, ProbeResult{
+			Provider:   c.Provider,
+			Model:      strings.TrimSpace(model),
+			Healthy:    healthy,
+			StatusCode: resp.StatusCode,
+			Message:    msg,
+			LatencyMs:  latency,
+		})
+	}
+	return results, nil
 }
 
 func probeRequestForProvider(entry store.ProviderCatalogEntry, baseURL, defaultModel string) (url, method string, body []byte) {

@@ -83,3 +83,55 @@ func TestProviderTestEndpointFail(t *testing.T) {
 		t.Fatalf("expected unavailable test status, got %#v", updated)
 	}
 }
+
+func TestProviderTestModelsEndpoint(t *testing.T) {
+	srv := newTestServer(t)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]interface{}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		model, _ := body["model"].(string)
+		if model == "bad-model" {
+			writeJSON(w, http.StatusBadRequest, map[string]interface{}{"error": "bad model"})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{"ok": true})
+	}))
+	defer upstream.Close()
+
+	conn, err := srv.store.CreateProviderConnection(store.ProviderConnection{
+		Provider: "openai",
+		Name:     "openai models test",
+		AuthType: "apikey",
+		APIKey:   "x",
+		IsActive: true,
+		ProviderSpecificData: map[string]interface{}{
+			"baseUrl": upstream.URL,
+			"apiType": "openai",
+		},
+		DefaultModel: "gpt-4o-mini",
+	})
+	if err != nil {
+		t.Fatalf("create connection: %v", err)
+	}
+
+	body, _ := json.Marshal(map[string]interface{}{"models": []string{"good-model", "bad-model"}})
+	req := httptest.NewRequest(http.MethodPost, "/api/providers/"+conn.ID+"/test-models", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	var payload struct {
+		Summary struct {
+			Total  int `json:"total"`
+			Passed int `json:"passed"`
+			Failed int `json:"failed"`
+		} `json:"summary"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode payload: %v", err)
+	}
+	if payload.Summary.Total != 2 || payload.Summary.Passed != 1 || payload.Summary.Failed != 1 {
+		t.Fatalf("unexpected summary: %#v", payload.Summary)
+	}
+}

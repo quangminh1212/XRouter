@@ -235,6 +235,10 @@ func (s *Server) handleProviders(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleProviderByID(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/api/providers/")
+	if strings.HasSuffix(path, "/test-models") {
+		s.handleProviderTestModels(w, r)
+		return
+	}
 	if strings.HasSuffix(path, "/test") {
 		s.handleProviderTest(w, r)
 		return
@@ -303,6 +307,68 @@ func (s *Server) handleProviderTest(w http.ResponseWriter, r *http.Request) {
 	}
 	updated.APIKey, updated.AccessToken, updated.RefreshToken = "", "", ""
 	writeJSON(w, http.StatusOK, map[string]interface{}{"result": result, "connection": updated})
+}
+
+func (s *Server) handleProviderTestModels(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	id := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/api/providers/"), "/test-models")
+	id = strings.TrimSuffix(id, "/")
+	if id == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "missing provider id"})
+		return
+	}
+	connection, ok := s.store.GetConnectionByIDRaw(id)
+	if !ok {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "provider connection not found"})
+		return
+	}
+	var body struct {
+		Models []string `json:"models"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil && err != io.EOF {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return
+	}
+	results, err := s.forwarder.ProbeModels(r.Context(), connection, body.Models)
+	if err != nil {
+		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+		return
+	}
+	passed := 0
+	failed := 0
+	lastMessage := ""
+	lastCode := 0
+	for _, item := range results {
+		if item.Healthy {
+			passed++
+			continue
+		}
+		failed++
+		lastMessage = item.Message
+		lastCode = item.StatusCode
+	}
+	status := "active"
+	if failed > 0 {
+		status = "unavailable"
+	}
+	updated, updateErr := s.store.UpdateConnectionTestStatus(id, status, lastMessage, lastCode)
+	if updateErr != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": updateErr.Error()})
+		return
+	}
+	updated.APIKey, updated.AccessToken, updated.RefreshToken = "", "", ""
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"summary": map[string]int{
+			"total":  len(results),
+			"passed": passed,
+			"failed": failed,
+		},
+		"results":    results,
+		"connection": updated,
+	})
 }
 
 func (s *Server) handleOAuthProviders(w http.ResponseWriter, r *http.Request) {
