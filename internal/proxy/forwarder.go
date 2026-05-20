@@ -555,6 +555,53 @@ func asNumberishInt64(v interface{}) (int64, bool) {
 	}
 }
 
+func oauthRefreshConfig(c store.ProviderConnection) (tokenURL, clientID, clientSecret string) {
+	if c.ProviderSpecificData == nil {
+		return "", "", ""
+	}
+	if v, ok := c.ProviderSpecificData["tokenUrl"].(string); ok {
+		tokenURL = strings.TrimSpace(v)
+	}
+	if v, ok := c.ProviderSpecificData["clientId"].(string); ok {
+		clientID = strings.TrimSpace(v)
+	}
+	if v, ok := c.ProviderSpecificData["clientSecret"].(string); ok {
+		clientSecret = strings.TrimSpace(v)
+	}
+	return tokenURL, clientID, clientSecret
+}
+
+func shouldRefreshOAuthToken(c store.ProviderConnection, now time.Time) bool {
+	if c.AuthType != "oauth" || strings.TrimSpace(c.RefreshToken) == "" {
+		return false
+	}
+	if strings.TrimSpace(c.TokenExpiry) == "" {
+		return false
+	}
+	expiry, err := time.Parse(time.RFC3339, c.TokenExpiry)
+	if err != nil {
+		return false
+	}
+	return expiry.Before(now.Add(5 * time.Minute))
+}
+
+func (f *Forwarder) maybeRefreshOAuthConnection(ctx context.Context, c store.ProviderConnection) (store.ProviderConnection, error) {
+	now := time.Now().UTC()
+	if !shouldRefreshOAuthToken(c, now) {
+		return c, nil
+	}
+	tokenURL, clientID, clientSecret := oauthRefreshConfig(c)
+	result, err := f.RefreshOAuthToken(ctx, c, tokenURL, clientID, clientSecret)
+	if err != nil {
+		return c, err
+	}
+	updated, err := f.store.UpdateOAuthTokens(c.ID, result.AccessToken, result.RefreshToken, result.TokenExpiry)
+	if err != nil {
+		return c, err
+	}
+	return updated, nil
+}
+
 func (f *Forwarder) ForwardMedia(ctx context.Context, request MediaRequest) (*http.Response, error) {
 	if err := f.refreshTransport(); err != nil {
 		return nil, err
@@ -724,6 +771,9 @@ func (f *Forwarder) Forward(ctx context.Context, scope, path string, requestBody
 	}
 	var lastErr error
 	for _, c := range candidates {
+		if updated, err := f.maybeRefreshOAuthConnection(ctx, c); err == nil {
+			c = updated
+		}
 		endpoint, mode, err := resolveEndpoint(c, model, path)
 		if err != nil {
 			lastErr = err
@@ -743,6 +793,35 @@ func (f *Forwarder) Forward(ctx context.Context, scope, path string, requestBody
 			lastErr = err
 			_ = f.store.MarkConnectionCooldown(c.ID, time.Now().Add(getCircuitOpenDuration(c.ConsecutiveFailures+1)), 0, err.Error())
 			continue
+		}
+		if resp.StatusCode == http.StatusUnauthorized && c.AuthType == "oauth" && strings.TrimSpace(c.RefreshToken) != "" {
+			_, _ = io.Copy(io.Discard, resp.Body)
+			_ = resp.Body.Close()
+			tokenURL, clientID, clientSecret := oauthRefreshConfig(c)
+			refreshed, refreshErr := f.RefreshOAuthToken(ctx, c, tokenURL, clientID, clientSecret)
+			if refreshErr != nil {
+				lastErr = refreshErr
+				continue
+			}
+			updated, updateErr := f.store.UpdateOAuthTokens(c.ID, refreshed.AccessToken, refreshed.RefreshToken, refreshed.TokenExpiry)
+			if updateErr != nil {
+				lastErr = updateErr
+				continue
+			}
+			c = updated
+			retryReq, retryErr := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(upstreamBody))
+			if retryErr != nil {
+				lastErr = retryErr
+				continue
+			}
+			retryReq.Header.Set("Content-Type", "application/json")
+			setAuthHeader(retryReq, c, mode)
+			resp, err = f.client.Do(retryReq)
+			if err != nil {
+				lastErr = err
+				_ = f.store.MarkConnectionCooldown(c.ID, time.Now().Add(getCircuitOpenDuration(c.ConsecutiveFailures+1)), 0, err.Error())
+				continue
+			}
 		}
 		if resp.StatusCode == 429 || resp.StatusCode >= 500 {
 			now := time.Now()

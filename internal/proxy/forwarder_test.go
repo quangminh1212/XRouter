@@ -129,3 +129,29 @@ func TestResolveMediaEndpointEmbeddings(t *testing.T) {
 		}
 	}
 }
+
+func TestShouldRefreshOAuthToken(t *testing.T) {
+	now := time.Date(2026, 5, 20, 12, 0, 0, 0, time.UTC)
+	c1 := store.ProviderConnection{AuthType: "oauth", RefreshToken: "r1", TokenExpiry: now.Add(4 * time.Minute).Format(time.RFC3339)}
+	c2 := store.ProviderConnection{AuthType: "oauth", RefreshToken: "r2", TokenExpiry: now.Add(10 * time.Minute).Format(time.RFC3339)}
+	if !shouldRefreshOAuthToken(c1, now) {
+		t.Fatalf("expected token with <5m ttl to refresh")
+	}
+	if shouldRefreshOAuthToken(c2, now) {
+		t.Fatalf("did not expect token with >5m ttl to refresh")
+	}
+}
+
+func TestOAuthRefreshConfig(t *testing.T) {
+	c := store.ProviderConnection{
+		ProviderSpecificData: map[string]interface{}{
+			"tokenUrl":     "https://example.com/token",
+			"clientId":     "cid",
+			"clientSecret": "sec",
+		},
+	}
+	tokenURL, clientID, clientSecret := oauthRefreshConfig(c)
+	if tokenURL != "https://example.com/token" || clientID != "cid" || clientSecret != "sec" {
+		t.Fatalf("unexpected refresh config: %s %s %s", tokenURL, clientID, clientSecret)
+	}
+}
