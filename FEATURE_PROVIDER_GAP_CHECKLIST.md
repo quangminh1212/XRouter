@@ -72,7 +72,7 @@ Reference repos:
 - [ ] Music/audio generation
 - [ ] Web search endpoint
 - [ ] Web fetch endpoint
-- [ ] Voice listing endpoints
+- [x] Voice listing endpoints
 
 ### 3) Management API depth
 
