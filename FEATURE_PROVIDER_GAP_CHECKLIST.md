@@ -64,7 +64,7 @@ Reference repos:
 - [x] Embeddings
 - [x] Images generations
 - [x] Images edits
-- [ ] Image-to-text / vision-specific media route
+- [x] Image-to-text / vision-specific media route
 - [x] Text-to-speech
 - [x] Speech-to-text
 - [ ] Video generation
