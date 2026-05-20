@@ -126,13 +126,15 @@ type RequestLog struct {
 }
 
 type AuthFile struct {
-	ID         string `json:"id"`
-	Name       string `json:"name"`
-	Provider   string `json:"provider,omitempty"`
-	ContentB64 string `json:"contentB64,omitempty"`
-	Size       int    `json:"size,omitempty"`
-	CreatedAt  string `json:"createdAt,omitempty"`
-	UpdatedAt  string `json:"updatedAt,omitempty"`
+	ID           string `json:"id"`
+	Name         string `json:"name"`
+	Provider     string `json:"provider,omitempty"`
+	AccountName  string `json:"accountName,omitempty"`
+	AccountEmail string `json:"accountEmail,omitempty"`
+	ContentB64   string `json:"contentB64,omitempty"`
+	Size         int    `json:"size,omitempty"`
+	CreatedAt    string `json:"createdAt,omitempty"`
+	UpdatedAt    string `json:"updatedAt,omitempty"`
 }
 
 type ProxyPool struct {
@@ -959,13 +961,26 @@ func (s *Store) RotateAPIKey(id string, newKey string) (APIKey, error) {
 	return APIKey{}, fmt.Errorf("api key not found")
 }
 
-func (s *Store) ListAuthFiles() []AuthFile {
+func (s *Store) ListAuthFiles(provider, account string) []AuthFile {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	out := make([]AuthFile, len(s.db.AuthFiles))
-	copy(out, s.db.AuthFiles)
-	for i := range out {
-		out[i].ContentB64 = ""
+	out := make([]AuthFile, 0, len(s.db.AuthFiles))
+	provider = strings.ToLower(strings.TrimSpace(provider))
+	account = strings.ToLower(strings.TrimSpace(account))
+	for _, item := range s.db.AuthFiles {
+		if provider != "" && strings.ToLower(strings.TrimSpace(item.Provider)) != provider {
+			continue
+		}
+		if account != "" {
+			name := strings.ToLower(strings.TrimSpace(item.AccountName))
+			email := strings.ToLower(strings.TrimSpace(item.AccountEmail))
+			if name != account && email != account {
+				continue
+			}
+		}
+		next := item
+		next.ContentB64 = ""
+		out = append(out, next)
 	}
 	sort.SliceStable(out, func(i, j int) bool {
 		return out[i].CreatedAt > out[j].CreatedAt
@@ -980,6 +995,8 @@ func (s *Store) CreateAuthFile(item AuthFile) (AuthFile, error) {
 	item.ID = randID("af_")
 	item.Name = strings.TrimSpace(item.Name)
 	item.Provider = strings.TrimSpace(item.Provider)
+	item.AccountName = strings.TrimSpace(item.AccountName)
+	item.AccountEmail = strings.TrimSpace(item.AccountEmail)
 	item.CreatedAt = now
 	item.UpdatedAt = now
 	item.Size = len(item.ContentB64)

@@ -995,12 +995,14 @@ func (s *Server) handleAuthFiles(w http.ResponseWriter, r *http.Request) {
 	}
 	switch r.Method {
 	case http.MethodGet:
-		writeJSON(w, http.StatusOK, map[string]interface{}{"files": s.store.ListAuthFiles()})
+		writeJSON(w, http.StatusOK, map[string]interface{}{"files": s.store.ListAuthFiles(r.URL.Query().Get("provider"), r.URL.Query().Get("account"))})
 	case http.MethodPost:
 		var body struct {
-			Name       string `json:"name"`
-			Provider   string `json:"provider"`
-			ContentB64 string `json:"contentB64"`
+			Name         string `json:"name"`
+			Provider     string `json:"provider"`
+			AccountName  string `json:"accountName"`
+			AccountEmail string `json:"accountEmail"`
+			ContentB64   string `json:"contentB64"`
 		}
 		if err := json.NewDecoder(io.LimitReader(r.Body, 3*1024*1024)).Decode(&body); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
@@ -1022,10 +1024,12 @@ func (s *Server) handleAuthFiles(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		created, err := s.store.CreateAuthFile(store.AuthFile{
-			Name:       name,
-			Provider:   strings.TrimSpace(body.Provider),
-			ContentB64: contentB64,
-			Size:       len(decoded),
+			Name:         name,
+			Provider:     strings.TrimSpace(body.Provider),
+			AccountName:  strings.TrimSpace(body.AccountName),
+			AccountEmail: strings.TrimSpace(body.AccountEmail),
+			ContentB64:   contentB64,
+			Size:         len(decoded),
 		})
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
