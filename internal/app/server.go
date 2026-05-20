@@ -1262,9 +1262,17 @@ func (s *Server) handleOAuthProviderStart(w http.ResponseWriter, r *http.Request
 	if authorizeURL == "" {
 		authorizeURL = strings.TrimSpace(entry.AuthorizeURL)
 	}
+	if authorizeURL == "" {
+		envName := "XROUTER_" + strings.ToUpper(strings.ReplaceAll(provider, "-", "_")) + "_OAUTH_AUTHORIZE_URL"
+		authorizeURL = strings.TrimSpace(os.Getenv(envName))
+	}
 	tokenURL := strings.TrimSpace(body.TokenURL)
 	if tokenURL == "" {
 		tokenURL = strings.TrimSpace(entry.TokenURL)
+	}
+	if tokenURL == "" {
+		envName := "XROUTER_" + strings.ToUpper(strings.ReplaceAll(provider, "-", "_")) + "_OAUTH_TOKEN_URL"
+		tokenURL = strings.TrimSpace(os.Getenv(envName))
 	}
 	scopes := body.Scopes
 	if len(scopes) == 0 {

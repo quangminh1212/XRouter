@@ -229,6 +229,27 @@ func TestAntigravityOAuthStartUsesCatalogDefaultsAndEnvClientID(t *testing.T) {
 	}
 }
 
+func TestKimiOAuthStartUsesEnvAuthorizeAndClientID(t *testing.T) {
+	srv := newTestServer(t)
+	t.Setenv("XROUTER_KIMI_OAUTH_AUTHORIZE_URL", "https://kimi.example.com/oauth/authorize")
+	t.Setenv("XROUTER_KIMI_OAUTH_CLIENT_ID", "kimi-test-client")
+	req := httptest.NewRequest(http.MethodPost, "/api/oauth/providers/kimi/start", bytes.NewReader([]byte(`{}`)))
+	req.Host = "localhost:1213"
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("start expected 200, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	var payload map[string]interface{}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	authURL, _ := payload["authorizationUrl"].(string)
+	if !strings.Contains(authURL, "kimi.example.com") || !strings.Contains(authURL, "client_id=kimi-test-client") {
+		t.Fatalf("unexpected authorizationUrl: %s", authURL)
+	}
+}
+
 func testOAuthConnection(provider, refreshToken string) store.ProviderConnection {
 	return store.ProviderConnection{
 		Provider:     provider,
