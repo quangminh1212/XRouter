@@ -95,7 +95,7 @@ Reference repos:
 - [x] Routing strategy management
 - [x] Retry/max retry interval management
 - [x] OAuth excluded models / model alias controls
-- [ ] Auth file upload/download/index flows
+- [x] Auth file upload/download/index flows
 - [ ] Vertex credential import flow
 - [ ] Proxy pools / upstream pool manager
 - [ ] Provider nodes / compatible node manager
