@@ -3,6 +3,7 @@ package proxy
 import (
 	"bytes"
 	"context"
+	"crypto/sha1"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -21,7 +22,21 @@ type Forwarder struct {
 	store           *store.Store
 	mu              sync.Mutex
 	proxyConfigHash string
+	dedupMu         sync.Mutex
+	dedup           map[string]*dedupEntry
 }
+
+type dedupEntry struct {
+	expiresAt time.Time
+	waitCh    chan struct{}
+	ready     bool
+	status    int
+	headers   http.Header
+	body      []byte
+	err       error
+}
+
+const dedupTTL = 5 * time.Second
 
 func NewForwarder(st *store.Store) *Forwarder {
 	transport := http.DefaultTransport.(*http.Transport).Clone()
@@ -33,6 +48,39 @@ func NewForwarder(st *store.Store) *Forwarder {
 	return &Forwarder{
 		client: &http.Client{Transport: transport, Timeout: 0},
 		store:  st,
+		dedup:  map[string]*dedupEntry{},
+	}
+}
+
+func isStreaming(body map[string]interface{}) bool {
+	v, ok := body["stream"]
+	if !ok {
+		return false
+	}
+	stream, ok := v.(bool)
+	return ok && stream
+}
+
+func dedupKey(path string, body []byte) string {
+	sum := sha1.Sum(append([]byte(path+"|"), body...))
+	return fmt.Sprintf("%x", sum[:])
+}
+
+func cloneHeader(in http.Header) http.Header {
+	out := make(http.Header, len(in))
+	for k, values := range in {
+		next := make([]string, len(values))
+		copy(next, values)
+		out[k] = next
+	}
+	return out
+}
+
+func cloneResponse(status int, headers http.Header, body []byte) *http.Response {
+	return &http.Response{
+		StatusCode: status,
+		Header:     cloneHeader(headers),
+		Body:       io.NopCloser(bytes.NewReader(body)),
 	}
 }
 
@@ -230,6 +278,11 @@ func (f *Forwarder) Forward(ctx context.Context, path string, requestBody []byte
 	}
 
 	upstreamBody := normalizeModelForUpstream(body, providerHint)
+	if !isStreaming(body) {
+		if resp, err, handled := f.forwardDedup(ctx, path, upstreamBody, model, providerHint); handled {
+			return resp, err
+		}
+	}
 	var lastErr error
 	for _, c := range candidates {
 		endpoint, mode, err := resolveEndpoint(c, model, path)
@@ -275,6 +328,129 @@ func (f *Forwarder) Forward(ctx context.Context, path string, requestBody []byte
 		return resp, nil
 	}
 
+	if lastErr == nil {
+		lastErr = fmt.Errorf("all providers failed")
+	}
+	return nil, lastErr
+}
+
+func (f *Forwarder) forwardDedup(ctx context.Context, path string, upstreamBody []byte, model, providerHint string) (*http.Response, error, bool) {
+	key := dedupKey(path, upstreamBody)
+	now := time.Now()
+
+	f.dedupMu.Lock()
+	if current, ok := f.dedup[key]; ok {
+		if !current.ready {
+			waitCh := current.waitCh
+			f.dedupMu.Unlock()
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err(), true
+			case <-waitCh:
+				if current.err != nil {
+					return nil, current.err, true
+				}
+				return cloneResponse(current.status, current.headers, current.body), nil, true
+			}
+		}
+		if now.Before(current.expiresAt) {
+			resp := cloneResponse(current.status, current.headers, current.body)
+			f.dedupMu.Unlock()
+			return resp, nil, true
+		}
+		delete(f.dedup, key)
+	}
+	entry := &dedupEntry{
+		expiresAt: now.Add(dedupTTL),
+		waitCh:    make(chan struct{}),
+	}
+	f.dedup[key] = entry
+	f.dedupMu.Unlock()
+
+	resp, err := f.forwardDirect(ctx, path, upstreamBody, model, providerHint)
+
+	f.dedupMu.Lock()
+	defer f.dedupMu.Unlock()
+	if err != nil {
+		entry.err = err
+		entry.ready = true
+		close(entry.waitCh)
+		delete(f.dedup, key)
+		return nil, err, true
+	}
+	defer resp.Body.Close()
+	body, readErr := io.ReadAll(io.LimitReader(resp.Body, 8*1024*1024))
+	if readErr != nil {
+		entry.err = readErr
+		entry.ready = true
+		close(entry.waitCh)
+		delete(f.dedup, key)
+		return nil, readErr, true
+	}
+	entry.expiresAt = time.Now().Add(dedupTTL)
+	entry.ready = true
+	entry.status = resp.StatusCode
+	entry.headers = cloneHeader(resp.Header)
+	entry.body = body
+	close(entry.waitCh)
+	return cloneResponse(entry.status, entry.headers, entry.body), nil, true
+}
+
+func (f *Forwarder) forwardDirect(ctx context.Context, path string, upstreamBody []byte, model, providerHint string) (*http.Response, error) {
+	candidates := f.store.GetActiveConnections(providerHint)
+	if len(candidates) == 0 && providerHint != "" {
+		candidates = f.store.GetActiveConnections("")
+	}
+	if len(candidates) == 0 {
+		return nil, fmt.Errorf("no active provider connections")
+	}
+
+	var body map[string]interface{}
+	_ = json.Unmarshal(upstreamBody, &body)
+	var lastErr error
+	for _, c := range candidates {
+		endpoint, mode, err := resolveEndpoint(c, model, path)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(upstreamBody))
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		req.Header.Set("Content-Type", "application/json")
+		setAuthHeader(req, c, mode)
+
+		resp, err := f.client.Do(req)
+		if err != nil {
+			lastErr = err
+			_ = f.store.MarkConnectionCooldown(c.ID, time.Now().Add(getCircuitOpenDuration(c.ConsecutiveFailures+1)), 0, err.Error())
+			continue
+		}
+		if resp.StatusCode == 429 || resp.StatusCode >= 500 {
+			now := time.Now()
+			until, ok := parseRateLimitReset(resp.Header, now)
+			if !ok {
+				until = now.Add(getFallbackCooldown(resp.StatusCode))
+			}
+			_, _ = io.Copy(io.Discard, resp.Body)
+			_ = resp.Body.Close()
+			lastErr = fmt.Errorf("upstream %s status %d", c.Provider, resp.StatusCode)
+			_ = f.store.MarkConnectionCooldown(c.ID, until, resp.StatusCode, lastErr.Error())
+			continue
+		}
+		if c.RateLimitedUntil != "" || c.CircuitOpenUntil != "" || c.TestStatus == "unavailable" || c.BackoffLevel > 0 || c.ConsecutiveFailures > 0 {
+			_ = f.store.ClearConnectionCooldown(c.ID)
+		}
+		resp.Header.Set("X-XRouter-Provider", c.Provider)
+		resp.Header.Set("X-XRouter-Connection-Id", c.ID)
+		if upstreamModel, ok := body["model"].(string); ok && strings.TrimSpace(upstreamModel) != "" {
+			resp.Header.Set("X-XRouter-Model", strings.TrimSpace(upstreamModel))
+		}
+		return resp, nil
+	}
 	if lastErr == nil {
 		lastErr = fmt.Errorf("all providers failed")
 	}
