@@ -84,6 +84,94 @@ func TestProviderTestEndpointFail(t *testing.T) {
 	}
 }
 
+func TestProviderValidateEndpointSuccess(t *testing.T) {
+	srv := newTestServer(t)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]interface{}{"ok": true})
+	}))
+	defer upstream.Close()
+
+	conn, err := srv.store.CreateProviderConnection(store.ProviderConnection{
+		Provider: "openai",
+		Name:     "openai validate",
+		AuthType: "apikey",
+		APIKey:   "x",
+		IsActive: true,
+		ProviderSpecificData: map[string]interface{}{
+			"baseUrl": upstream.URL,
+			"apiType": "openai",
+		},
+		DefaultModel: "gpt-4o-mini",
+	})
+	if err != nil {
+		t.Fatalf("create connection: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/providers/"+conn.ID+"/validate", bytes.NewReader([]byte("{}")))
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	var payload struct {
+		Result struct {
+			Healthy bool   `json:"healthy"`
+			Model   string `json:"model"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode payload: %v", err)
+	}
+	if !payload.Result.Healthy || payload.Result.Model != "gpt-4o-mini" {
+		t.Fatalf("unexpected validate payload: %#v", payload)
+	}
+	updated, ok := srv.store.GetConnectionByIDRaw(conn.ID)
+	if !ok {
+		t.Fatalf("connection not found after validate")
+	}
+	if updated.TestStatus != "" {
+		t.Fatalf("validate should not update test status, got %q", updated.TestStatus)
+	}
+}
+
+func TestProviderValidateEndpointFail(t *testing.T) {
+	srv := newTestServer(t)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusUnauthorized, map[string]interface{}{"error": "unauthorized"})
+	}))
+	defer upstream.Close()
+
+	conn, err := srv.store.CreateProviderConnection(store.ProviderConnection{
+		Provider: "openai",
+		Name:     "openai validate fail",
+		AuthType: "apikey",
+		APIKey:   "x",
+		IsActive: true,
+		ProviderSpecificData: map[string]interface{}{
+			"baseUrl": upstream.URL,
+			"apiType": "openai",
+		},
+		DefaultModel: "gpt-4o-mini",
+	})
+	if err != nil {
+		t.Fatalf("create connection: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/providers/"+conn.ID+"/validate", bytes.NewReader([]byte("{}")))
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadGateway {
+		t.Fatalf("expected 502, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	updated, ok := srv.store.GetConnectionByIDRaw(conn.ID)
+	if !ok {
+		t.Fatalf("connection not found after validate")
+	}
+	if updated.TestStatus != "" {
+		t.Fatalf("validate should not update test status, got %q", updated.TestStatus)
+	}
+}
+
 func TestProviderTestModelsEndpoint(t *testing.T) {
 	srv := newTestServer(t)
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

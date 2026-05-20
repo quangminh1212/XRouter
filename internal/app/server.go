@@ -239,6 +239,10 @@ func (s *Server) handleProviderByID(w http.ResponseWriter, r *http.Request) {
 		s.handleProviderTestModels(w, r)
 		return
 	}
+	if strings.HasSuffix(path, "/validate") {
+		s.handleProviderValidate(w, r)
+		return
+	}
 	if strings.HasSuffix(path, "/models") {
 		s.handleProviderModels(w, r)
 		return
@@ -335,6 +339,30 @@ func (s *Server) handleProviderTest(w http.ResponseWriter, r *http.Request) {
 	}
 	updated.APIKey, updated.AccessToken, updated.RefreshToken = "", "", ""
 	writeJSON(w, http.StatusOK, map[string]interface{}{"result": result, "connection": updated})
+}
+
+func (s *Server) handleProviderValidate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	id := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/api/providers/"), "/validate")
+	id = strings.TrimSuffix(id, "/")
+	if id == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "missing provider id"})
+		return
+	}
+	connection, ok := s.store.GetConnectionByIDRaw(id)
+	if !ok {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "provider connection not found"})
+		return
+	}
+	result, err := s.forwarder.ProbeConnection(r.Context(), connection)
+	if err != nil {
+		writeJSON(w, http.StatusBadGateway, map[string]interface{}{"result": result, "error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{"result": result})
 }
 
 func (s *Server) handleProviderTestModels(w http.ResponseWriter, r *http.Request) {
