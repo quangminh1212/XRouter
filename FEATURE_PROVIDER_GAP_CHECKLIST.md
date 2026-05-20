@@ -114,7 +114,7 @@ Reference repos:
 - [ ] OAuth login flow for xAI/Grok
 - [ ] Browser-cookie/web-session onboarding
 - [x] Auto import from local IDE/CLI credentials
-- [ ] Multi-account auth file management
+- [x] Multi-account auth file management
 
 ### 5) Routing and platform capabilities
 
