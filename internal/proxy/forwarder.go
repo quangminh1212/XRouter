@@ -822,7 +822,7 @@ func buildSearchRequest(ctx context.Context, c store.ProviderConnection, baseURL
 		req.Header.Set("Accept", "application/json")
 		req.Header.Set("X-Subscription-Token", c.APIKey)
 		return req, nil
-	case "serper":
+	case "serper", "serper-search":
 		req, err := postJSONSearch(ctx, baseURL+"/search", c, map[string]interface{}{"q": query, "num": maxResults})
 		if err != nil {
 			return nil, err
@@ -830,9 +830,9 @@ func buildSearchRequest(ctx context.Context, c store.ProviderConnection, baseURL
 		req.Header.Del("Authorization")
 		req.Header.Set("X-API-KEY", c.APIKey)
 		return req, nil
-	case "tavily":
+	case "tavily", "tavily-search":
 		return postJSONSearch(ctx, baseURL+"/search", c, map[string]interface{}{"query": query, "max_results": maxResults})
-	case "exa":
+	case "exa", "exa-search":
 		return postJSONSearch(ctx, baseURL+"/search", c, map[string]interface{}{"query": query, "numResults": maxResults})
 	case "perplexity-search":
 		return postJSONSearch(ctx, baseURL+"/search", c, map[string]interface{}{"query": query, "max_results": maxResults})
@@ -863,9 +863,9 @@ func normalizeSearchResults(provider string, raw interface{}) []SearchResult {
 		if web, ok := root["web"].(map[string]interface{}); ok {
 			return normalizeResultArray(web["results"], "title", "url", "description")
 		}
-	case "serper":
+	case "serper", "serper-search":
 		return normalizeResultArray(root["organic"], "title", "link", "snippet")
-	case "tavily", "exa", "perplexity-search":
+	case "tavily", "tavily-search", "exa", "exa-search", "perplexity-search":
 		return normalizeResultArray(root["results"], "title", "url", "content")
 	}
 	return nil

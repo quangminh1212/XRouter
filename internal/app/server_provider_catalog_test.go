@@ -82,3 +82,41 @@ func TestProviderCatalogIncludesGrokOAuthAlias(t *testing.T) {
 		}
 	}
 }
+
+func TestProviderCatalogIncludesSearchAliases(t *testing.T) {
+	srv := newTestServer(t)
+	req := httptest.NewRequest(http.MethodGet, "/api/providers/catalog?apiType=search&authType=apikey", nil)
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	var payload struct {
+		Providers []store.ProviderCatalogEntry `json:"providers"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	expected := map[string]string{
+		"brave-search":      "https://api.search.brave.com/res/v1",
+		"serper":            "https://google.serper.dev",
+		"serper-search":     "https://google.serper.dev",
+		"tavily":            "https://api.tavily.com",
+		"tavily-search":     "https://api.tavily.com",
+		"exa":               "https://api.exa.ai",
+		"exa-search":        "https://api.exa.ai",
+		"perplexity-search": "https://api.perplexity.ai",
+	}
+	seen := map[string]string{}
+	for _, provider := range payload.Providers {
+		if provider.APIType != "search" || provider.AuthType != "apikey" {
+			t.Fatalf("unexpected filtered provider: %#v", provider)
+		}
+		seen[provider.Provider] = provider.BaseURL
+	}
+	for name, baseURL := range expected {
+		if got := seen[name]; got != baseURL {
+			t.Fatalf("expected %s baseUrl %s, got %q", name, baseURL, got)
+		}
+	}
+}

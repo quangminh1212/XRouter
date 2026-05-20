@@ -428,7 +428,7 @@ Legend:
 | `empower` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `enally` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `exa` | 9router | apiKey | NO | Need adapter/auth/base URL/model transform |
-| `exa-search` | OmniRoute | search | NO | Need adapter/auth/base URL/model transform |
+| `exa-search` | OmniRoute | search | YES | Added search catalog alias + reused existing Exa search adapter |
 | `fal-ai` | 9router, OmniRoute | apiKey, apikey | NO | Need adapter/auth/base URL/model transform |
 | `featherless-ai` | OmniRoute | apikey | YES | Added Wave 3 OpenAI-compatible catalog + fallback model |
 | `fenayai` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
@@ -523,7 +523,7 @@ Legend:
 | `openrouter` | 9router, OmniRoute | apikey, freeTier | YES | Built-in/generic route |
 | `ovhcloud` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `perplexity` | 9router, OmniRoute | apiKey, apikey | NO | Need adapter/auth/base URL/model transform |
-| `perplexity-search` | OmniRoute | search | NO | Need adapter/auth/base URL/model transform |
+| `perplexity-search` | OmniRoute | search | YES | Search provider catalog + adapter already present |
 | `perplexity-web` | 9router, OmniRoute | webCookie, web_cookie | NO | Need adapter/auth/base URL/model transform |
 | `petals` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `piapi` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
@@ -548,16 +548,16 @@ Legend:
 | `searchapi-search` | OmniRoute | search | NO | Need adapter/auth/base URL/model transform |
 | `searxng` | 9router | apiKey | NO | Need adapter/auth/base URL/model transform |
 | `searxng-search` | OmniRoute | search | NO | Need adapter/auth/base URL/model transform |
-| `serper` | 9router | apiKey | NO | Need adapter/auth/base URL/model transform |
-| `serper-search` | OmniRoute | search | NO | Need adapter/auth/base URL/model transform |
+| `serper` | 9router | apiKey | YES | Search provider catalog + adapter already present |
+| `serper-search` | OmniRoute | search | YES | Added search catalog alias + reused existing Serper adapter |
 | `siliconflow` | 9router, OmniRoute | apiKey, apikey | NO | Need adapter/auth/base URL/model transform |
 | `snowflake` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `stability-ai` | 9router, OmniRoute | apiKey, apikey | NO | Need adapter/auth/base URL/model transform |
 | `suno` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `synthetic` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `t3-web` | OmniRoute | web_cookie | NO | Need adapter/auth/base URL/model transform |
-| `tavily` | 9router | apiKey | NO | Need adapter/auth/base URL/model transform |
-| `tavily-search` | OmniRoute | search | NO | Need adapter/auth/base URL/model transform |
+| `tavily` | 9router | apiKey | YES | Search provider catalog + adapter already present |
+| `tavily-search` | OmniRoute | search | YES | Added search catalog alias + reused existing Tavily adapter |
 | `thebai` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `together` | 9router, OmniRoute | apiKey, apikey | NO | Need adapter/auth/base URL/model transform |
 | `topaz` | 9router, OmniRoute | apiKey, apikey | NO | Need adapter/auth/base URL/model transform |
