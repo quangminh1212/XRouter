@@ -102,7 +102,7 @@ Reference repos:
 ### 4) Authentication/provider onboarding
 
 - [x] Manual API key storage
-- [x] OAuth token import groundwork (local-only API)
+- [x] OAuth token import groundwork (local-only API)`r`n- [x] OAuth token manual refresh endpoint`r`n- [x] OAuth token auto-refresh before request / one retry on 401
 - [x] Manual access token storage
 - [x] Manual refresh token storage
 - [ ] OAuth login flow for Claude
@@ -575,6 +575,7 @@ Legend:
   - built-in routing exists directly (`openai`, `anthropic`, `openrouter`), or
   - the current code can already route a generic compatible provider class without adding a whole new provider-specific auth flow.
 - `NO` means XRouter still needs at least one of: provider adapter logic, auth onboarding flow, model normalization, dedicated endpoint support, or management UX/API.
+
 
 
 
