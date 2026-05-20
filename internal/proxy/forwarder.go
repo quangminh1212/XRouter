@@ -139,6 +139,9 @@ func resolveEndpoint(c store.ProviderConnection, model, path string) (string, st
 	if path == "/v1/completions" {
 		return joinOpenAIEndpoint(baseURL, "/v1/completions"), "openai", nil
 	}
+	if apiType == "anthropic" {
+		return joinOpenAIEndpoint(baseURL, "/v1/messages"), "anthropic", nil
+	}
 	if strings.Contains(model, "claude") || c.Provider == "anthropic" || strings.HasPrefix(c.Provider, "anthropic-compatible-") {
 		return joinOpenAIEndpoint(baseURL, "/v1/messages"), "anthropic", nil
 	}

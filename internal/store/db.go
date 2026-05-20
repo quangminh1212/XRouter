@@ -18,34 +18,42 @@ import (
 
 type ProviderCatalogEntry struct {
 	Provider       string   `json:"provider"`
+	AuthType       string   `json:"authType,omitempty"`
 	APIType        string   `json:"apiType"`
 	BaseURL        string   `json:"baseUrl"`
 	FallbackModels []string `json:"fallbackModels,omitempty"`
 }
 
 var providerCatalog = map[string]ProviderCatalogEntry{
-	"openai":            {Provider: "openai", APIType: "openai", BaseURL: "https://api.openai.com"},
-	"anthropic":         {Provider: "anthropic", APIType: "anthropic", BaseURL: "https://api.anthropic.com"},
-	"openrouter":        {Provider: "openrouter", APIType: "openai", BaseURL: "https://openrouter.ai/api"},
-	"deepseek":          {Provider: "deepseek", APIType: "openai", BaseURL: "https://api.deepseek.com", FallbackModels: []string{"deepseek/deepseek-chat"}},
-	"groq":              {Provider: "groq", APIType: "openai", BaseURL: "https://api.groq.com/openai", FallbackModels: []string{"groq/llama-3.1-70b-versatile"}},
-	"mistral":           {Provider: "mistral", APIType: "openai", BaseURL: "https://api.mistral.ai", FallbackModels: []string{"mistral/mistral-large-latest"}},
-	"cerebras":          {Provider: "cerebras", APIType: "openai", BaseURL: "https://api.cerebras.ai", FallbackModels: []string{"cerebras/llama3.1-70b"}},
-	"fireworks":         {Provider: "fireworks", APIType: "openai", BaseURL: "https://api.fireworks.ai/inference/v1", FallbackModels: []string{"fireworks/accounts/fireworks/models/llama-v3p1-70b-instruct"}},
-	"together":          {Provider: "together", APIType: "openai", BaseURL: "https://api.together.xyz/v1", FallbackModels: []string{"together/meta-llama/Llama-3.1-70B-Instruct-Turbo"}},
-	"siliconflow":       {Provider: "siliconflow", APIType: "openai", BaseURL: "https://api.siliconflow.cn/v1", FallbackModels: []string{"siliconflow/Qwen/Qwen2.5-Coder-32B-Instruct"}},
-	"vercel-ai-gateway": {Provider: "vercel-ai-gateway", APIType: "openai", BaseURL: "https://ai-gateway.vercel.sh/v1", FallbackModels: []string{"vercel-ai-gateway/openai/gpt-4o-mini"}},
-	"cohere":            {Provider: "cohere", APIType: "openai", BaseURL: "https://api.cohere.com/compatibility/v1", FallbackModels: []string{"cohere/command-r-plus"}},
-	"perplexity":        {Provider: "perplexity", APIType: "openai", BaseURL: "https://api.perplexity.ai", FallbackModels: []string{"perplexity/sonar-pro"}},
-	"voyage-ai":         {Provider: "voyage-ai", APIType: "embedding", BaseURL: "https://api.voyageai.com/v1"},
-	"jina-ai":           {Provider: "jina-ai", APIType: "embedding", BaseURL: "https://api.jina.ai/v1"},
-	"openai-tts":        {Provider: "openai-tts", APIType: "tts", BaseURL: "https://api.openai.com/v1"},
-	"deepgram":          {Provider: "deepgram", APIType: "stt", BaseURL: "https://api.deepgram.com/v1"},
-	"brave-search":      {Provider: "brave-search", APIType: "search", BaseURL: "https://api.search.brave.com/res/v1"},
-	"serper":            {Provider: "serper", APIType: "search", BaseURL: "https://google.serper.dev"},
-	"tavily":            {Provider: "tavily", APIType: "search", BaseURL: "https://api.tavily.com"},
-	"exa":               {Provider: "exa", APIType: "search", BaseURL: "https://api.exa.ai"},
-	"perplexity-search": {Provider: "perplexity-search", APIType: "search", BaseURL: "https://api.perplexity.ai"},
+	"openai":            {Provider: "openai", AuthType: "apikey", APIType: "openai", BaseURL: "https://api.openai.com"},
+	"anthropic":         {Provider: "anthropic", AuthType: "apikey", APIType: "anthropic", BaseURL: "https://api.anthropic.com"},
+	"openrouter":        {Provider: "openrouter", AuthType: "apikey", APIType: "openai", BaseURL: "https://openrouter.ai/api"},
+	"deepseek":          {Provider: "deepseek", AuthType: "apikey", APIType: "openai", BaseURL: "https://api.deepseek.com", FallbackModels: []string{"deepseek/deepseek-chat"}},
+	"groq":              {Provider: "groq", AuthType: "apikey", APIType: "openai", BaseURL: "https://api.groq.com/openai", FallbackModels: []string{"groq/llama-3.1-70b-versatile"}},
+	"mistral":           {Provider: "mistral", AuthType: "apikey", APIType: "openai", BaseURL: "https://api.mistral.ai", FallbackModels: []string{"mistral/mistral-large-latest"}},
+	"cerebras":          {Provider: "cerebras", AuthType: "apikey", APIType: "openai", BaseURL: "https://api.cerebras.ai", FallbackModels: []string{"cerebras/llama3.1-70b"}},
+	"fireworks":         {Provider: "fireworks", AuthType: "apikey", APIType: "openai", BaseURL: "https://api.fireworks.ai/inference/v1", FallbackModels: []string{"fireworks/accounts/fireworks/models/llama-v3p1-70b-instruct"}},
+	"together":          {Provider: "together", AuthType: "apikey", APIType: "openai", BaseURL: "https://api.together.xyz/v1", FallbackModels: []string{"together/meta-llama/Llama-3.1-70B-Instruct-Turbo"}},
+	"siliconflow":       {Provider: "siliconflow", AuthType: "apikey", APIType: "openai", BaseURL: "https://api.siliconflow.cn/v1", FallbackModels: []string{"siliconflow/Qwen/Qwen2.5-Coder-32B-Instruct"}},
+	"vercel-ai-gateway": {Provider: "vercel-ai-gateway", AuthType: "apikey", APIType: "openai", BaseURL: "https://ai-gateway.vercel.sh/v1", FallbackModels: []string{"vercel-ai-gateway/openai/gpt-4o-mini"}},
+	"cohere":            {Provider: "cohere", AuthType: "apikey", APIType: "openai", BaseURL: "https://api.cohere.com/compatibility/v1", FallbackModels: []string{"cohere/command-r-plus"}},
+	"perplexity":        {Provider: "perplexity", AuthType: "apikey", APIType: "openai", BaseURL: "https://api.perplexity.ai", FallbackModels: []string{"perplexity/sonar-pro"}},
+	"voyage-ai":         {Provider: "voyage-ai", AuthType: "apikey", APIType: "embedding", BaseURL: "https://api.voyageai.com/v1"},
+	"jina-ai":           {Provider: "jina-ai", AuthType: "apikey", APIType: "embedding", BaseURL: "https://api.jina.ai/v1"},
+	"openai-tts":        {Provider: "openai-tts", AuthType: "apikey", APIType: "tts", BaseURL: "https://api.openai.com/v1"},
+	"deepgram":          {Provider: "deepgram", AuthType: "apikey", APIType: "stt", BaseURL: "https://api.deepgram.com/v1"},
+	"brave-search":      {Provider: "brave-search", AuthType: "apikey", APIType: "search", BaseURL: "https://api.search.brave.com/res/v1"},
+	"serper":            {Provider: "serper", AuthType: "apikey", APIType: "search", BaseURL: "https://google.serper.dev"},
+	"tavily":            {Provider: "tavily", AuthType: "apikey", APIType: "search", BaseURL: "https://api.tavily.com"},
+	"exa":               {Provider: "exa", AuthType: "apikey", APIType: "search", BaseURL: "https://api.exa.ai"},
+	"perplexity-search": {Provider: "perplexity-search", AuthType: "apikey", APIType: "search", BaseURL: "https://api.perplexity.ai"},
+	"claude":            {Provider: "claude", AuthType: "oauth", APIType: "anthropic", BaseURL: "https://api.anthropic.com", FallbackModels: []string{"claude/claude-3-5-sonnet-latest"}},
+	"codex":             {Provider: "codex", AuthType: "oauth", APIType: "openai", BaseURL: "https://api.openai.com", FallbackModels: []string{"codex/gpt-4o-mini"}},
+	"github":            {Provider: "github", AuthType: "oauth", APIType: "openai", BaseURL: "https://models.inference.ai.azure.com", FallbackModels: []string{"github/gpt-4o-mini"}},
+	"gemini":            {Provider: "gemini", AuthType: "oauth", APIType: "openai", BaseURL: "https://generativelanguage.googleapis.com/v1beta/openai", FallbackModels: []string{"gemini/gemini-1.5-flash"}},
+	"xai":               {Provider: "xai", AuthType: "oauth", APIType: "openai", BaseURL: "https://api.x.ai", FallbackModels: []string{"xai/grok-2-latest"}},
+	"antigravity":       {Provider: "antigravity", AuthType: "oauth", APIType: "openai", BaseURL: "https://api.antigravity.ai/v1"},
+	"kimi":              {Provider: "kimi", AuthType: "oauth", APIType: "openai", BaseURL: "https://api.moonshot.ai", FallbackModels: []string{"kimi/moonshot-v1-8k"}},
 }
 
 type ProviderConnection struct {
@@ -235,6 +243,17 @@ func GetFallbackModels() []map[string]string {
 	return out
 }
 
+func ListProviderCatalogEntries() []ProviderCatalogEntry {
+	out := make([]ProviderCatalogEntry, 0, len(providerCatalog))
+	for _, entry := range providerCatalog {
+		out = append(out, entry)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].Provider < out[j].Provider
+	})
+	return out
+}
+
 func applyProviderDefaults(c ProviderConnection) ProviderConnection {
 	entry, ok := GetProviderCatalogEntry(c.Provider)
 	if !ok {
@@ -244,7 +263,10 @@ func applyProviderDefaults(c ProviderConnection) ProviderConnection {
 		c.ProviderSpecificData = map[string]interface{}{}
 	}
 	if strings.TrimSpace(c.AuthType) == "" {
-		c.AuthType = "apikey"
+		c.AuthType = entry.AuthType
+		if c.AuthType == "" {
+			c.AuthType = "apikey"
+		}
 	}
 	if _, ok := c.ProviderSpecificData["baseUrl"]; !ok || strings.TrimSpace(fmt.Sprint(c.ProviderSpecificData["baseUrl"])) == "" {
 		c.ProviderSpecificData["baseUrl"] = entry.BaseURL

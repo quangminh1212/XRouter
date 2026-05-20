@@ -63,6 +63,8 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/settings", s.handleSettings)
 	s.mux.HandleFunc("/api/providers", s.handleProviders)
 	s.mux.HandleFunc("/api/providers/", s.handleProviderByID)
+	s.mux.HandleFunc("/api/oauth/providers", s.handleOAuthProviders)
+	s.mux.HandleFunc("/api/oauth/providers/", s.handleOAuthProviderImport)
 	s.mux.HandleFunc("/api/keys", s.handleAPIKeys)
 	s.mux.HandleFunc("/api/keys/", s.handleAPIKeyByID)
 	s.mux.HandleFunc("/api/models", s.handleModels)
@@ -242,6 +244,83 @@ func (s *Server) handleProviderByID(w http.ResponseWriter, r *http.Request) {
 	default:
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
 	}
+}
+
+func (s *Server) handleOAuthProviders(w http.ResponseWriter, r *http.Request) {
+	if !isLocalOnlyRequest(r) {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "oauth provider management is restricted to localhost"})
+		return
+	}
+	if r.Method != http.MethodGet {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	providers := make([]store.ProviderCatalogEntry, 0)
+	for _, entry := range store.ListProviderCatalogEntries() {
+		if entry.AuthType == "oauth" {
+			providers = append(providers, entry)
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{"providers": providers})
+}
+
+func (s *Server) handleOAuthProviderImport(w http.ResponseWriter, r *http.Request) {
+	if !isLocalOnlyRequest(r) {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "oauth provider management is restricted to localhost"})
+		return
+	}
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	suffix := strings.TrimPrefix(r.URL.Path, "/api/oauth/providers/")
+	provider := strings.TrimSuffix(strings.TrimSpace(suffix), "/import")
+	if !strings.HasSuffix(suffix, "/import") || provider == "" {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
+		return
+	}
+	entry, ok := store.GetProviderCatalogEntry(provider)
+	if !ok || entry.AuthType != "oauth" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "unknown oauth provider"})
+		return
+	}
+	var body struct {
+		Name                 string                 `json:"name"`
+		AccessToken          string                 `json:"accessToken"`
+		RefreshToken         string                 `json:"refreshToken"`
+		APIKey               string                 `json:"apiKey"`
+		DefaultModel         string                 `json:"defaultModel"`
+		ProviderSpecificData map[string]interface{} `json:"providerSpecificData"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return
+	}
+	if strings.TrimSpace(body.AccessToken) == "" && strings.TrimSpace(body.APIKey) == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "accessToken or apiKey is required"})
+		return
+	}
+	name := strings.TrimSpace(body.Name)
+	if name == "" {
+		name = entry.Provider + " oauth"
+	}
+	created, err := s.store.CreateProviderConnection(store.ProviderConnection{
+		Provider:             entry.Provider,
+		Name:                 name,
+		AuthType:             "oauth",
+		APIKey:               strings.TrimSpace(body.APIKey),
+		AccessToken:          strings.TrimSpace(body.AccessToken),
+		RefreshToken:         strings.TrimSpace(body.RefreshToken),
+		IsActive:             true,
+		DefaultModel:         strings.TrimSpace(body.DefaultModel),
+		ProviderSpecificData: body.ProviderSpecificData,
+	})
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	created.APIKey, created.AccessToken, created.RefreshToken = "", "", ""
+	writeJSON(w, http.StatusCreated, created)
 }
 
 func (s *Server) handleAPIKeys(w http.ResponseWriter, r *http.Request) {
