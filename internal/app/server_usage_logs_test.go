@@ -130,7 +130,7 @@ func TestDashboardRendersUsageUI(t *testing.T) {
 		t.Fatalf("unexpected content type: %s", got)
 	}
 	body := rec.Body.String()
-	for _, want := range []string{"XRouter Dashboard", "/api/usage/stats", "/api/usage/logs?limit=50", "/api/usage/stream?limit=50", "searchInput", "providerFilter", "statusFilter"} {
+	for _, want := range []string{"XRouter Dashboard", "/api/usage/stats", "/api/usage/logs?limit=50", "/api/usage/stream?limit=50", "/api/usage/logs/", "searchInput", "providerFilter", "statusFilter", "logDetail"} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("dashboard missing %q", want)
 		}

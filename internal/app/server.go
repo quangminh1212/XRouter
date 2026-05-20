@@ -2420,7 +2420,10 @@ const dashboardHTML = `<!doctype html>
     table { width: 100%; border-collapse: collapse; font-size: 13px; }
     th, td { border-bottom: 1px solid #1f2937; padding: 10px 8px; text-align: left; vertical-align: top; }
     th { color: #93c5fd; font-weight: 600; }
+    tr[data-id] { cursor: pointer; }
+    tr[data-id]:hover { background: #0b1220; }
     code { color: #a7f3d0; }
+    pre { white-space: pre-wrap; word-break: break-word; background: #020617; border: 1px solid #1f2937; border-radius: 12px; padding: 12px; max-height: 360px; overflow: auto; }
     .status { color: #22c55e; }
     .error { color: #fb7185; }
   </style>
@@ -2457,6 +2460,10 @@ const dashboardHTML = `<!doctype html>
       <tbody id="logs"><tr><td colspan="6">Loading...</td></tr></tbody>
     </table>
   </section>
+  <section class="card">
+    <h2>Request Detail</h2>
+    <pre id="logDetail">Click a request row to inspect details.</pre>
+  </section>
   <script>
     const fmt = new Intl.NumberFormat();
     const money = new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 4 });
@@ -2490,7 +2497,7 @@ const dashboardHTML = `<!doctype html>
       currentLogs = items;
       renderProviderFilter(items);
       const filtered = applyFilters(items);
-      logs.innerHTML = filtered.length ? filtered.map(item => '<tr>' +
+      logs.innerHTML = filtered.length ? filtered.map(item => '<tr data-id="' + (item.id || '') + '">' +
         '<td>' + (item.timestamp || '') + '</td>' +
         '<td>' + (item.statusCode || '') + '</td>' +
         '<td><code>' + (item.provider || '') + '</code></td>' +
@@ -2498,6 +2505,17 @@ const dashboardHTML = `<!doctype html>
         '<td>' + (item.path || '') + '</td>' +
         '<td class="error">' + (item.error || '') + '</td>' +
       '</tr>').join('') : '<tr><td colspan="6">No requests yet</td></tr>';
+    }
+    async function showLogDetail(id) {
+      if (!id) return;
+      logDetail.textContent = 'Loading ' + id + '...';
+      try {
+        const res = await fetch('/api/usage/logs/' + encodeURIComponent(id));
+        const payload = await res.json();
+        logDetail.textContent = JSON.stringify(payload, null, 2);
+      } catch (err) {
+        logDetail.textContent = err.message;
+      }
     }
     async function loadInitial() {
       const [statsRes, logsRes] = await Promise.all([fetch('/api/usage/stats'), fetch('/api/usage/logs?limit=50')]);
@@ -2520,6 +2538,10 @@ const dashboardHTML = `<!doctype html>
       element.addEventListener('input', () => setLogs(currentLogs));
       element.addEventListener('change', () => setLogs(currentLogs));
     }
+    logs.addEventListener('click', event => {
+      const row = event.target.closest('tr[data-id]');
+      if (row) showLogDetail(row.dataset.id);
+    });
   </script>
 </body>
 </html>`

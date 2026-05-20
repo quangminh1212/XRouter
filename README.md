@@ -75,7 +75,7 @@ Use `provider/model` names, for example `openai-compatible/gpt-test`, `anthropic
 
 ## Local Dashboard
 
-- `GET /dashboard` (localhost only) renders an embedded HTML page that consumes `/api/usage/stats`, `/api/usage/logs` and `/api/usage/stream` for a live view of activity, with client-side filters for provider, status and search.
+- `GET /dashboard` (localhost only) renders an embedded HTML page that consumes `/api/usage/stats`, `/api/usage/logs` and `/api/usage/stream` for a live view of activity, with client-side filters for provider, status and search, plus click-to-inspect request log details.
 
 ## Versioning
 
