@@ -110,7 +110,7 @@ Reference repos:
 - [x] OAuth login flow for Codex/OpenAI
 - [x] OAuth login flow for Gemini CLI
 - [x] OAuth login flow for Antigravity
-- [ ] OAuth login flow for Kimi
+- [x] OAuth login flow for Kimi
 - [ ] OAuth login flow for xAI/Grok
 - [ ] Browser-cookie/web-session onboarding
 - [x] Auto import from local IDE/CLI credentials
