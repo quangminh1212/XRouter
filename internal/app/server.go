@@ -91,6 +91,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/quota", s.handleQuota)
 	s.mux.HandleFunc("/api/usage/summary", s.handleQuota)
 	s.mux.HandleFunc("/api/usage/logs", s.handleUsageLogs)
+	s.mux.HandleFunc("/api/usage/history", s.handleUsageHistory)
 	s.mux.HandleFunc("/api/debug/db", s.handleDebugDB)
 	s.mux.HandleFunc("/api/monitoring/health", s.handleMonitoringHealth)
 	s.mux.HandleFunc("/v1/chat/completions", s.handleProxy)
@@ -1194,6 +1195,26 @@ func (s *Server) handleUsageLogs(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"items": logs,
 		"count": len(logs),
+	})
+}
+
+func (s *Server) handleUsageHistory(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	limit := 100
+	if raw := strings.TrimSpace(r.URL.Query().Get("limit")); raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
+			limit = parsed
+		}
+	}
+	provider := strings.TrimSpace(r.URL.Query().Get("provider"))
+	items := s.store.GetUsageHistory(limit, provider)
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"items":    items,
+		"count":    len(items),
+		"provider": provider,
 	})
 }
 

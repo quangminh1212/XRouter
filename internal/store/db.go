@@ -937,6 +937,24 @@ func (s *Store) GetRequestLogs(limit int) []RequestLog {
 	return out
 }
 
+func (s *Store) GetUsageHistory(limit int, provider string) []UsageEntry {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]UsageEntry, 0, len(s.db.UsageData.History))
+	provider = strings.TrimSpace(provider)
+	for i := len(s.db.UsageData.History) - 1; i >= 0; i-- {
+		item := s.db.UsageData.History[i]
+		if provider != "" && item.Provider != provider {
+			continue
+		}
+		out = append(out, item)
+		if limit > 0 && len(out) >= limit {
+			break
+		}
+	}
+	return out
+}
+
 func pricingNumber(node map[string]interface{}, keys ...string) (float64, bool) {
 	for _, key := range keys {
 		raw, ok := node[key]
