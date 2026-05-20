@@ -61,8 +61,8 @@ func isStreaming(body map[string]interface{}) bool {
 	return ok && stream
 }
 
-func dedupKey(path string, body []byte) string {
-	sum := sha1.Sum(append([]byte(path+"|"), body...))
+func dedupKey(scope, path string, body []byte) string {
+	sum := sha1.Sum(append([]byte(scope+"|"+path+"|"), body...))
 	return fmt.Sprintf("%x", sum[:])
 }
 
@@ -246,7 +246,7 @@ func getCircuitOpenDuration(failures int) time.Duration {
 	}
 }
 
-func (f *Forwarder) Forward(ctx context.Context, path string, requestBody []byte) (*http.Response, error) {
+func (f *Forwarder) Forward(ctx context.Context, scope, path string, requestBody []byte) (*http.Response, error) {
 	if err := f.refreshTransport(); err != nil {
 		return nil, err
 	}
@@ -279,7 +279,7 @@ func (f *Forwarder) Forward(ctx context.Context, path string, requestBody []byte
 
 	upstreamBody := normalizeModelForUpstream(body, providerHint)
 	if !isStreaming(body) {
-		if resp, err, handled := f.forwardDedup(ctx, path, upstreamBody, model, providerHint); handled {
+		if resp, err, handled := f.forwardDedup(ctx, scope, path, upstreamBody, model, providerHint); handled {
 			return resp, err
 		}
 	}
@@ -334,8 +334,8 @@ func (f *Forwarder) Forward(ctx context.Context, path string, requestBody []byte
 	return nil, lastErr
 }
 
-func (f *Forwarder) forwardDedup(ctx context.Context, path string, upstreamBody []byte, model, providerHint string) (*http.Response, error, bool) {
-	key := dedupKey(path, upstreamBody)
+func (f *Forwarder) forwardDedup(ctx context.Context, scope, path string, upstreamBody []byte, model, providerHint string) (*http.Response, error, bool) {
+	key := dedupKey(scope, path, upstreamBody)
 	now := time.Now()
 
 	f.dedupMu.Lock()

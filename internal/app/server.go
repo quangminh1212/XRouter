@@ -591,7 +591,8 @@ func (s *Server) handleProxy(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
 		return
 	}
-	if _, err := s.authorize(r); err != nil {
+	apiKey, err := s.authorize(r)
+	if err != nil {
 		if strings.Contains(err.Error(), "rate limit exceeded") {
 			writeJSON(w, http.StatusTooManyRequests, map[string]string{"error": err.Error()})
 			return
@@ -604,7 +605,7 @@ func (s *Server) handleProxy(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "failed to read body"})
 		return
 	}
-	resp, err := s.forwarder.Forward(r.Context(), r.URL.Path, body)
+	resp, err := s.forwarder.Forward(r.Context(), apiKey.ID, r.URL.Path, body)
 	if err != nil {
 		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
 		return
