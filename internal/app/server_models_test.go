@@ -53,6 +53,33 @@ func TestCreateWave1ProviderFillsDefaults(t *testing.T) {
 	}
 }
 
+func TestCreateWave2ProviderFillsDefaults(t *testing.T) {
+	srv := newTestServer(t)
+	body := bytes.NewBufferString(`{"provider":"nvidia","name":"NVIDIA test","apiKey":"secret"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/providers", body)
+	rec := httptest.NewRecorder()
+
+	srv.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var got map[string]interface{}
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	data, ok := got["providerSpecificData"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected providerSpecificData in response: %#v", got)
+	}
+	if data["baseUrl"] != "https://integrate.api.nvidia.com/v1" {
+		t.Fatalf("unexpected baseUrl: %#v", data["baseUrl"])
+	}
+	if data["apiType"] != "openai" {
+		t.Fatalf("unexpected apiType: %#v", data["apiType"])
+	}
+}
+
 func TestModelsIncludeWave1Fallbacks(t *testing.T) {
 	srv := newTestServer(t)
 	req := httptest.NewRequest(http.MethodGet, "/api/models", nil)
@@ -70,9 +97,13 @@ func TestModelsIncludeWave1Fallbacks(t *testing.T) {
 		t.Fatalf("decode response: %v", err)
 	}
 	wanted := map[string]bool{
-		"deepseek/deepseek-chat":       false,
-		"groq/llama-3.1-70b-versatile": false,
-		"perplexity/sonar-pro":         false,
+		"deepseek/deepseek-chat":                           false,
+		"groq/llama-3.1-70b-versatile":                     false,
+		"perplexity/sonar-pro":                             false,
+		"nvidia/deepseek-ai/deepseek-v4-flash":             false,
+		"huggingface/deepseek-ai/DeepSeek-V3-0324:fastest": false,
+		"minimax/MiniMax-M2.7":                             false,
+		"glm/glm-4.7":                                      false,
 	}
 	for _, model := range got.Models {
 		if _, ok := wanted[model["fullModel"]]; ok {

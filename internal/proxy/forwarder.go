@@ -193,10 +193,32 @@ func buildGeminiEndpoint(baseURL, model, path string) (string, string, error) {
 
 func joinOpenAIEndpoint(baseURL, path string) string {
 	base := strings.TrimRight(baseURL, "/")
-	if strings.HasPrefix(path, "/v1/") && strings.HasSuffix(base, "/v1") {
+	if strings.HasPrefix(path, "/v1/") && (strings.HasSuffix(base, "/v1") || endsWithVersionSegment(base)) {
 		return base + strings.TrimPrefix(path, "/v1")
 	}
 	return base + path
+}
+
+func endsWithVersionSegment(baseURL string) bool {
+	parts := strings.Split(strings.TrimRight(baseURL, "/"), "/")
+	if len(parts) == 0 {
+		return false
+	}
+	last := strings.TrimSpace(parts[len(parts)-1])
+	if len(last) < 2 || last[0] != 'v' {
+		return false
+	}
+	hasDigit := false
+	for _, ch := range last[1:] {
+		if ch >= '0' && ch <= '9' {
+			hasDigit = true
+			continue
+		}
+		if ch != '.' {
+			return false
+		}
+	}
+	return hasDigit
 }
 
 func setAuthHeader(req *http.Request, c store.ProviderConnection, mode string) {

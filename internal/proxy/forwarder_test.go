@@ -51,6 +51,10 @@ func TestResolveEndpointWave1Providers(t *testing.T) {
 		"vercel-ai-gateway": "https://ai-gateway.vercel.sh/v1/chat/completions",
 		"cohere":            "https://api.cohere.com/compatibility/v1/chat/completions",
 		"perplexity":        "https://api.perplexity.ai/v1/chat/completions",
+		"nvidia":            "https://integrate.api.nvidia.com/v1/chat/completions",
+		"huggingface":       "https://router.huggingface.co/v1/chat/completions",
+		"minimax":           "https://api.minimax.io/v1/chat/completions",
+		"glm":               "https://open.bigmodel.cn/api/paas/v4/chat/completions",
 	}
 	for provider, want := range tests {
 		got, mode, err := resolveEndpoint(store.ProviderConnection{Provider: provider}, provider+"/test-model", "/v1/chat/completions")
