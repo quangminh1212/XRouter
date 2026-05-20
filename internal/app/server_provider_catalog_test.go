@@ -69,7 +69,7 @@ func TestProviderCatalogIncludesGrokOAuthAlias(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	wantOAuth := map[string]bool{"claude": false, "codex": false, "gemini": false, "xai": false, "grok": false, "kimi": false, "antigravity": false}
+	wantOAuth := map[string]bool{"claude": false, "codex": false, "gemini": false, "gemini-cli": false, "xai": false, "grok": false, "kimi": false, "antigravity": false}
 	for _, provider := range payload.Providers {
 		if provider.AuthType != "oauth" {
 			t.Fatalf("expected only oauth providers, got %#v", provider)
