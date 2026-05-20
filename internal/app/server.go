@@ -328,10 +328,26 @@ func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	aliases := s.store.GetModelAliases()
-	models := make([]map[string]string, 0, len(aliases))
+	modelMap := map[string]map[string]string{}
 	for model, alias := range aliases {
-		models = append(models, map[string]string{"fullModel": model, "alias": alias})
+		modelMap[model] = map[string]string{"fullModel": model, "alias": alias}
 	}
+	for _, model := range store.GetFallbackModels() {
+		fullModel := strings.TrimSpace(model["fullModel"])
+		if fullModel == "" {
+			continue
+		}
+		if _, ok := modelMap[fullModel]; !ok {
+			modelMap[fullModel] = map[string]string{"fullModel": fullModel, "alias": model["alias"]}
+		}
+	}
+	models := make([]map[string]string, 0, len(modelMap))
+	for _, model := range modelMap {
+		models = append(models, model)
+	}
+	slices.SortFunc(models, func(a, b map[string]string) int {
+		return strings.Compare(a["fullModel"], b["fullModel"])
+	})
 	writeJSON(w, http.StatusOK, map[string]interface{}{"models": models})
 }
 
