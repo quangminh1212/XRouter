@@ -68,7 +68,7 @@ Reference repos:
 - [x] Text-to-speech
 - [x] Speech-to-text
 - [x] Video generation
-- [ ] Video edits/extensions/retrieve
+- [x] Video edits/extensions/retrieve
 - [ ] Music/audio generation
 - [ ] Web search endpoint
 - [x] Web fetch endpoint
