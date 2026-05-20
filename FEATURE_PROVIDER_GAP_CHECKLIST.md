@@ -108,7 +108,7 @@ Reference repos:
 - [x] Manual refresh token storage
 - [x] OAuth login flow for Claude
 - [x] OAuth login flow for Codex/OpenAI
-- [ ] OAuth login flow for Gemini CLI
+- [x] OAuth login flow for Gemini CLI
 - [ ] OAuth login flow for Antigravity
 - [ ] OAuth login flow for Kimi
 - [ ] OAuth login flow for xAI/Grok
