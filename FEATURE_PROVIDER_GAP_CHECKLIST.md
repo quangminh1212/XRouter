@@ -12,7 +12,7 @@ Reference repos:
 - XRouter scope has expanded strongly and now includes OAuth/web-cookie onboarding, media/search endpoints, dashboard, MCP/A2A/tunnel, usage streams, and management APIs.
 - XRouter built-in provider catalog currently includes **65** providers (`internal/store/db.go`), with broad OpenAI-compatible/OAuth/web-cookie/search/audio coverage.
 - Full parity is still **not 100%** versus the 3 reference repos. Based on latest heads (`OmniRoute@39526b2`, `9router@9dde485`, `CLIProxyAPI@a726e37`), key provider/service gaps remain.
-- Current high-confidence provider gaps (vs OmniRoute + 9router provider assets): `assemblyai`, `aws-polly`, `azure`, `black-forest-labs`, `byteplus`, `cartesia`, `clarifai`, `cloudflare-ai`, `elevenlabs`, `gemini-cli`, `nebius`.
+- Current high-confidence provider gaps (vs OmniRoute + 9router provider assets): `assemblyai`, `aws-polly`, `azure`, `black-forest-labs`, `cartesia`, `clarifai`, `cloudflare-ai`, `elevenlabs`, `gemini-cli`.
 
 ## Current XRouter Coverage
 
