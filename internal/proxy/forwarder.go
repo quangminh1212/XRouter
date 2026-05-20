@@ -1118,6 +1118,8 @@ func mediaAPIType(path string) string {
 		return "embedding"
 	case "/v1/images/generations", "/v1/images/edits":
 		return "image"
+	case "/v1/images/analyze":
+		return "vision"
 	case "/v1/audio/speech":
 		return "tts"
 	case "/v1/audio/transcriptions":
@@ -1131,7 +1133,7 @@ func supportsMediaAPI(provider, providerAPIType, requested string) bool {
 	if providerAPIType == requested {
 		return true
 	}
-	return provider == "openai" && providerAPIType == "openai" && (requested == "embedding" || requested == "image")
+	return provider == "openai" && providerAPIType == "openai" && (requested == "embedding" || requested == "image" || requested == "vision")
 }
 
 func (f *Forwarder) forwardMediaWithConnection(ctx context.Context, c store.ProviderConnection, request MediaRequest, apiType string) (*http.Response, error) {
@@ -1196,6 +1198,8 @@ func resolveMediaEndpoint(c store.ProviderConnection, path, apiType string) (str
 		return joinOpenAIEndpoint(baseURL, "/v1/embeddings"), "openai", nil
 	case "image":
 		return joinOpenAIEndpoint(baseURL, path), "openai", nil
+	case "vision":
+		return joinOpenAIEndpoint(baseURL, "/v1/chat/completions"), "openai", nil
 	case "tts":
 		return joinOpenAIEndpoint(baseURL, "/v1/audio/speech"), "openai", nil
 	case "stt":
