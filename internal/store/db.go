@@ -73,6 +73,8 @@ type ProviderConnection struct {
 	Priority             int                    `json:"priority"`
 	GlobalPriority       *int                   `json:"globalPriority,omitempty"`
 	DefaultModel         string                 `json:"defaultModel,omitempty"`
+	ExcludedModels       []string               `json:"excludedModels,omitempty"`
+	ModelAliases         map[string]string      `json:"modelAliases,omitempty"`
 	ProviderSpecificData map[string]interface{} `json:"providerSpecificData,omitempty"`
 	RateLimitedUntil     string                 `json:"rateLimitedUntil,omitempty"`
 	BackoffLevel         int                    `json:"backoffLevel,omitempty"`

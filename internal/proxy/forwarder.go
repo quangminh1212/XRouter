@@ -209,6 +209,61 @@ func normalizeModelForUpstream(body map[string]interface{}, providerHint string)
 	return raw
 }
 
+func cloneRequestBody(body map[string]interface{}) map[string]interface{} {
+	out := make(map[string]interface{}, len(body))
+	for k, v := range body {
+		out[k] = v
+	}
+	return out
+}
+
+func connectionHasModelControls(c store.ProviderConnection) bool {
+	return len(c.ExcludedModels) > 0 || len(c.ModelAliases) > 0
+}
+
+func anyConnectionHasModelControls(candidates []store.ProviderConnection) bool {
+	for _, c := range candidates {
+		if connectionHasModelControls(c) {
+			return true
+		}
+	}
+	return false
+}
+
+func connectionModelExcluded(c store.ProviderConnection, model string) bool {
+	model = strings.TrimSpace(model)
+	if model == "" {
+		return false
+	}
+	for _, item := range c.ExcludedModels {
+		item = strings.TrimSpace(item)
+		if item == model {
+			return true
+		}
+		if strings.Contains(model, "/") && strings.TrimPrefix(model, c.Provider+"/") == item {
+			return true
+		}
+	}
+	return false
+}
+
+func applyConnectionModelAlias(c store.ProviderConnection, model string) string {
+	model = strings.TrimSpace(model)
+	if model == "" || len(c.ModelAliases) == 0 {
+		return model
+	}
+	if target := strings.TrimSpace(c.ModelAliases[model]); target != "" {
+		return target
+	}
+	if strings.Contains(model, "/") {
+		unprefixed := strings.TrimPrefix(model, c.Provider+"/")
+		if target := strings.TrimSpace(c.ModelAliases[unprefixed]); target != "" {
+			return target
+		}
+	}
+	return model
+}
+
 func parseRetryAfter(value string, now time.Time) (time.Time, bool) {
 	raw := strings.TrimSpace(value)
 	if raw == "" {
@@ -1104,14 +1159,18 @@ func (f *Forwarder) Forward(ctx context.Context, scope, path string, requestBody
 	maxAttempts := maxForwardAttempts(f.store.GetSettings())
 	attempts := 0
 
-	upstreamBody := normalizeModelForUpstream(body, providerHint)
-	if !isStreaming(body) {
+	upstreamBody := normalizeModelForUpstream(cloneRequestBody(body), providerHint)
+	if !isStreaming(body) && !anyConnectionHasModelControls(candidates) {
 		if resp, err, handled := f.forwardDedup(ctx, scope, path, upstreamBody, model, providerHint); handled {
 			return resp, err
 		}
 	}
 	var lastErr error
 	for _, c := range candidates {
+		effectiveModel := applyConnectionModelAlias(c, model)
+		if connectionModelExcluded(c, model) || connectionModelExcluded(c, effectiveModel) {
+			continue
+		}
 		if attempts >= maxAttempts {
 			break
 		}
@@ -1119,13 +1178,18 @@ func (f *Forwarder) Forward(ctx context.Context, scope, path string, requestBody
 		if updated, err := f.maybeRefreshOAuthConnection(ctx, c); err == nil {
 			c = updated
 		}
-		endpoint, mode, err := resolveEndpoint(c, model, path)
+		effectiveBody := cloneRequestBody(body)
+		if effectiveModel != "" {
+			effectiveBody["model"] = effectiveModel
+		}
+		connectionBody := normalizeModelForUpstream(effectiveBody, c.Provider)
+		endpoint, mode, err := resolveEndpoint(c, effectiveModel, path)
 		if err != nil {
 			lastErr = err
 			continue
 		}
 
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(upstreamBody))
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(connectionBody))
 		if err != nil {
 			lastErr = err
 			continue
@@ -1154,7 +1218,7 @@ func (f *Forwarder) Forward(ctx context.Context, scope, path string, requestBody
 				continue
 			}
 			c = updated
-			retryReq, retryErr := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(upstreamBody))
+			retryReq, retryErr := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(connectionBody))
 			if retryErr != nil {
 				lastErr = retryErr
 				continue
@@ -1185,7 +1249,7 @@ func (f *Forwarder) Forward(ctx context.Context, scope, path string, requestBody
 		}
 		resp.Header.Set("X-XRouter-Provider", c.Provider)
 		resp.Header.Set("X-XRouter-Connection-Id", c.ID)
-		if upstreamModel, ok := body["model"].(string); ok && strings.TrimSpace(upstreamModel) != "" {
+		if upstreamModel, ok := effectiveBody["model"].(string); ok && strings.TrimSpace(upstreamModel) != "" {
 			resp.Header.Set("X-XRouter-Model", strings.TrimSpace(upstreamModel))
 		}
 		return resp, nil
