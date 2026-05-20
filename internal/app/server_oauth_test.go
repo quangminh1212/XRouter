@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"xrouter/internal/store"
@@ -167,6 +168,25 @@ func TestStartAndExchangeOAuthFlow(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("oauth exchange did not create provider connection")
+	}
+}
+
+func TestClaudeOAuthStartUsesCatalogDefaults(t *testing.T) {
+	srv := newTestServer(t)
+	req := httptest.NewRequest(http.MethodPost, "/api/oauth/providers/claude/start", bytes.NewReader([]byte(`{}`)))
+	req.Host = "localhost:1213"
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("start expected 200, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	var payload map[string]interface{}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	authURL, _ := payload["authorizationUrl"].(string)
+	if !strings.Contains(authURL, "console.anthropic.com") || !strings.Contains(authURL, "client_id=claude-cli") {
+		t.Fatalf("unexpected authorizationUrl: %s", authURL)
 	}
 }
 
