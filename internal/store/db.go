@@ -21,7 +21,10 @@ type ProviderCatalogEntry struct {
 	AuthType       string   `json:"authType,omitempty"`
 	APIType        string   `json:"apiType"`
 	BaseURL        string   `json:"baseUrl"`
+	AuthorizeURL   string   `json:"authorizeUrl,omitempty"`
 	TokenURL       string   `json:"tokenUrl,omitempty"`
+	ClientID       string   `json:"clientId,omitempty"`
+	Scopes         []string `json:"scopes,omitempty"`
 	FallbackModels []string `json:"fallbackModels,omitempty"`
 }
 
@@ -49,9 +52,9 @@ var providerCatalog = map[string]ProviderCatalogEntry{
 	"exa":               {Provider: "exa", AuthType: "apikey", APIType: "search", BaseURL: "https://api.exa.ai"},
 	"perplexity-search": {Provider: "perplexity-search", AuthType: "apikey", APIType: "search", BaseURL: "https://api.perplexity.ai"},
 	"claude":            {Provider: "claude", AuthType: "oauth", APIType: "anthropic", BaseURL: "https://api.anthropic.com", TokenURL: "https://console.anthropic.com/v1/oauth/token", FallbackModels: []string{"claude/claude-3-5-sonnet-latest"}},
-	"codex":             {Provider: "codex", AuthType: "oauth", APIType: "openai", BaseURL: "https://api.openai.com", TokenURL: "https://auth.openai.com/oauth/token", FallbackModels: []string{"codex/gpt-4o-mini"}},
+	"codex":             {Provider: "codex", AuthType: "oauth", APIType: "openai", BaseURL: "https://api.openai.com", AuthorizeURL: "https://auth.openai.com/oauth/authorize", TokenURL: "https://auth.openai.com/oauth/token", ClientID: "codex-cli", Scopes: []string{"openid", "profile", "email", "offline_access"}, FallbackModels: []string{"codex/gpt-4o-mini"}},
 	"github":            {Provider: "github", AuthType: "oauth", APIType: "openai", BaseURL: "https://models.inference.ai.azure.com", FallbackModels: []string{"github/gpt-4o-mini"}},
-	"gemini":            {Provider: "gemini", AuthType: "oauth", APIType: "openai", BaseURL: "https://generativelanguage.googleapis.com/v1beta/openai", TokenURL: "https://oauth2.googleapis.com/token", FallbackModels: []string{"gemini/gemini-1.5-flash"}},
+	"gemini":            {Provider: "gemini", AuthType: "oauth", APIType: "openai", BaseURL: "https://generativelanguage.googleapis.com/v1beta/openai", AuthorizeURL: "https://accounts.google.com/o/oauth2/v2/auth", TokenURL: "https://oauth2.googleapis.com/token", ClientID: "gemini-cli", Scopes: []string{"https://www.googleapis.com/auth/cloud-platform", "https://www.googleapis.com/auth/userinfo.email"}, FallbackModels: []string{"gemini/gemini-1.5-flash"}},
 	"xai":               {Provider: "xai", AuthType: "oauth", APIType: "openai", BaseURL: "https://api.x.ai", TokenURL: "https://accounts.x.ai/oauth/token", FallbackModels: []string{"xai/grok-2-latest"}},
 	"antigravity":       {Provider: "antigravity", AuthType: "oauth", APIType: "openai", BaseURL: "https://api.antigravity.ai/v1"},
 	"kimi":              {Provider: "kimi", AuthType: "oauth", APIType: "openai", BaseURL: "https://api.moonshot.ai", TokenURL: "https://www.kimi.com/api/oauth/token", FallbackModels: []string{"kimi/moonshot-v1-8k"}},

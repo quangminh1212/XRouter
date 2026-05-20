@@ -106,6 +106,70 @@ func TestRefreshOAuthProviderToken(t *testing.T) {
 	}
 }
 
+func TestStartAndExchangeOAuthFlow(t *testing.T) {
+	srv := newTestServer(t)
+	tokenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := r.ParseForm(); err != nil {
+			t.Fatalf("parse form: %v", err)
+		}
+		if r.Form.Get("grant_type") != "authorization_code" {
+			t.Fatalf("expected authorization_code grant")
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"access_token":  "access-from-exchange",
+			"refresh_token": "refresh-from-exchange",
+			"expires_in":    3600,
+			"token_type":    "Bearer",
+		})
+	}))
+	defer tokenServer.Close()
+
+	startBody, _ := json.Marshal(map[string]interface{}{
+		"clientId":     "demo-client",
+		"clientSecret": "demo-secret",
+		"authorizeUrl": "https://example.com/oauth/authorize",
+		"tokenUrl":     tokenServer.URL,
+		"redirectUri":  "http://localhost:1213/api/oauth/callback",
+		"scopes":       []string{"openid", "offline_access"},
+	})
+	startReq := httptest.NewRequest(http.MethodPost, "/api/oauth/providers/codex/start", bytes.NewReader(startBody))
+	startReq.Host = "localhost:1213"
+	startRec := httptest.NewRecorder()
+	srv.ServeHTTP(startRec, startReq)
+	if startRec.Code != http.StatusOK {
+		t.Fatalf("start expected 200, got %d body=%s", startRec.Code, startRec.Body.String())
+	}
+	var startResp map[string]interface{}
+	if err := json.Unmarshal(startRec.Body.Bytes(), &startResp); err != nil {
+		t.Fatalf("decode start: %v", err)
+	}
+	state := startResp["state"].(string)
+	exchangeBody, _ := json.Marshal(map[string]interface{}{
+		"state": state,
+		"code":  "auth-code-123",
+		"name":  "Codex Browser OAuth",
+	})
+	exchangeReq := httptest.NewRequest(http.MethodPost, "/api/oauth/providers/codex/exchange", bytes.NewReader(exchangeBody))
+	exchangeReq.Host = "localhost:1213"
+	exchangeRec := httptest.NewRecorder()
+	srv.ServeHTTP(exchangeRec, exchangeReq)
+	if exchangeRec.Code != http.StatusCreated {
+		t.Fatalf("exchange expected 201, got %d body=%s", exchangeRec.Code, exchangeRec.Body.String())
+	}
+	found := false
+	for _, c := range srv.store.GetAllConnectionsRaw() {
+		if c.Provider == "codex" && c.Name == "Codex Browser OAuth" {
+			found = true
+			if c.AccessToken != "access-from-exchange" || c.RefreshToken != "refresh-from-exchange" {
+				t.Fatalf("unexpected stored oauth tokens: %#v", c)
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("oauth exchange did not create provider connection")
+	}
+}
+
 func testOAuthConnection(provider, refreshToken string) store.ProviderConnection {
 	return store.ProviderConnection{
 		Provider:     provider,

@@ -52,6 +52,10 @@ func NewForwarder(st *store.Store) *Forwarder {
 	}
 }
 
+func (f *Forwarder) HTTPClient() *http.Client {
+	return f.client
+}
+
 func isStreaming(body map[string]interface{}) bool {
 	v, ok := body["stream"]
 	if !ok {
