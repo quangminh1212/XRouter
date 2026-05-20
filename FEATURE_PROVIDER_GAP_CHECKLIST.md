@@ -70,7 +70,7 @@ Reference repos:
 - [x] Video generation
 - [x] Video edits/extensions/retrieve
 - [x] Music/audio generation
-- [ ] Web search endpoint
+- [x] Web search endpoint
 - [x] Web fetch endpoint
 - [x] Voice listing endpoints
 
