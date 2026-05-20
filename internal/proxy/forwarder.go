@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"slices"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -420,28 +421,65 @@ func rotateCandidates(items []store.ProviderConnection, offset int) []store.Prov
 	return out
 }
 
+func quotaAwareCandidates(candidates []store.ProviderConnection, defaultRPM int) []store.ProviderConnection {
+	out := append([]store.ProviderConnection(nil), candidates...)
+	sort.SliceStable(out, func(i, j int) bool {
+		left := out[i].RequestsPerMinute
+		right := out[j].RequestsPerMinute
+		if left <= 0 {
+			left = defaultRPM
+		}
+		if right <= 0 {
+			right = defaultRPM
+		}
+		if left == right {
+			if out[i].Priority == out[j].Priority {
+				return out[i].CreatedAt > out[j].CreatedAt
+			}
+			return out[i].Priority < out[j].Priority
+		}
+		return left > right
+	})
+	return out
+}
+
+func weightedFirstIndex(candidates []store.ProviderConnection, cursor int) int {
+	if len(candidates) == 0 {
+		return 0
+	}
+	weighted := make([]int, 0, len(candidates)*2)
+	for i, candidate := range candidates {
+		weight := candidate.AccountWeight
+		if weight <= 0 {
+			weight = 1
+		}
+		for j := 0; j < weight; j++ {
+			weighted = append(weighted, i)
+		}
+	}
+	if len(weighted) == 0 {
+		return 0
+	}
+	return weighted[cursor%len(weighted)]
+}
+
 func (f *Forwarder) reorderCandidates(scope, model string, candidates []store.ProviderConnection) []store.ProviderConnection {
 	settings := f.store.GetSettings()
+	candidates = quotaAwareCandidates(candidates, settings.DefaultRequestsPerMinute)
 	switch settings.ComboStrategy {
 	case "round_robin":
 		f.rrMu.Lock()
 		defer f.rrMu.Unlock()
 		key := "global"
-		offset := 0
-		if len(candidates) > 0 {
-			offset = f.rrIndex[key] % len(candidates)
-		}
+		offset := weightedFirstIndex(candidates, f.rrIndex[key])
 		f.rrIndex[key] = f.rrIndex[key] + 1
 		return rotateCandidates(candidates, offset)
 	case "sticky_round_robin":
 		sum := sha1.Sum([]byte(scope + "|" + model))
-		offset := 0
-		if len(candidates) > 0 {
-			offset = int(sum[0]) % len(candidates)
-		}
+		offset := weightedFirstIndex(candidates, int(sum[0]))
 		return rotateCandidates(candidates, offset)
 	default:
-		return append([]store.ProviderConnection(nil), candidates...)
+		return candidates
 	}
 }
 

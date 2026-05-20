@@ -73,6 +73,8 @@ type ProviderConnection struct {
 	IsActive             bool                   `json:"isActive"`
 	Priority             int                    `json:"priority"`
 	GlobalPriority       *int                   `json:"globalPriority,omitempty"`
+	AccountWeight        int                    `json:"accountWeight,omitempty"`
+	RequestsPerMinute    int                    `json:"requestsPerMinute,omitempty"`
 	DefaultModel         string                 `json:"defaultModel,omitempty"`
 	ExcludedModels       []string               `json:"excludedModels,omitempty"`
 	ModelAliases         map[string]string      `json:"modelAliases,omitempty"`
