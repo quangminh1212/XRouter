@@ -111,3 +111,21 @@ func TestNormalizeSearchResultsSerper(t *testing.T) {
 		t.Fatalf("unexpected normalize output: %#v", out)
 	}
 }
+
+func TestResolveMediaEndpointEmbeddings(t *testing.T) {
+	tests := map[string]string{
+		"openai":    "https://api.openai.com/v1/embeddings",
+		"cohere":    "https://api.cohere.com/compatibility/v1/embeddings",
+		"voyage-ai": "https://api.voyageai.com/v1/embeddings",
+		"jina-ai":   "https://api.jina.ai/v1/embeddings",
+	}
+	for provider, want := range tests {
+		got, _, err := resolveMediaEndpoint(store.ProviderConnection{Provider: provider}, "/v1/embeddings", "embedding")
+		if err != nil {
+			t.Fatalf("%s endpoint failed: %v", provider, err)
+		}
+		if got != want {
+			t.Fatalf("%s expected %s, got %s", provider, want, got)
+		}
+	}
+}

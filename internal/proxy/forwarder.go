@@ -169,6 +169,9 @@ func setAuthHeader(req *http.Request, c store.ProviderConnection, mode string) {
 	if mode == "anthropic" {
 		req.Header.Set("anthropic-version", "2023-06-01")
 	}
+	if mode == "deepgram" && c.APIKey != "" {
+		req.Header.Set("Authorization", "Token "+c.APIKey)
+	}
 }
 
 func extractModel(body map[string]interface{}) string {
@@ -272,6 +275,13 @@ type SearchResponse struct {
 	Query    string         `json:"query"`
 	Results  []SearchResult `json:"results"`
 	Raw      interface{}    `json:"raw,omitempty"`
+}
+
+type MediaRequest struct {
+	Path     string
+	Body     []byte
+	Provider string
+	Headers  http.Header
 }
 
 func (f *Forwarder) Search(ctx context.Context, request SearchRequest) (SearchResponse, error) {
@@ -450,6 +460,136 @@ func normalizeResultArray(raw interface{}, titleKey, urlKey, snippetKey string) 
 		})
 	}
 	return results
+}
+
+func (f *Forwarder) ForwardMedia(ctx context.Context, request MediaRequest) (*http.Response, error) {
+	if err := f.refreshTransport(); err != nil {
+		return nil, err
+	}
+	apiType := mediaAPIType(request.Path)
+	if apiType == "" {
+		return nil, fmt.Errorf("unsupported media path")
+	}
+	candidates := f.store.GetActiveConnections(strings.TrimSpace(request.Provider))
+	if len(candidates) == 0 && strings.TrimSpace(request.Provider) != "" {
+		candidates = f.store.GetActiveConnections("")
+	}
+	filtered := make([]store.ProviderConnection, 0, len(candidates))
+	for _, c := range candidates {
+		if entry, ok := store.GetProviderCatalogEntry(c.Provider); ok && supportsMediaAPI(c.Provider, entry.APIType, apiType) {
+			filtered = append(filtered, c)
+		}
+	}
+	if len(filtered) == 0 {
+		return nil, fmt.Errorf("no active %s provider connections", apiType)
+	}
+	var lastErr error
+	for _, c := range filtered {
+		resp, err := f.forwardMediaWithConnection(ctx, c, request, apiType)
+		if err == nil {
+			return resp, nil
+		}
+		lastErr = err
+		if !strings.HasPrefix(err.Error(), "upstream ") {
+			_ = f.store.MarkConnectionCooldown(c.ID, time.Now().Add(getCircuitOpenDuration(c.ConsecutiveFailures+1)), 0, err.Error())
+		}
+	}
+	if lastErr == nil {
+		lastErr = fmt.Errorf("all %s providers failed", apiType)
+	}
+	return nil, lastErr
+}
+
+func mediaAPIType(path string) string {
+	switch path {
+	case "/v1/embeddings":
+		return "embedding"
+	case "/v1/audio/speech":
+		return "tts"
+	case "/v1/audio/transcriptions":
+		return "stt"
+	default:
+		return ""
+	}
+}
+
+func supportsMediaAPI(provider, providerAPIType, requested string) bool {
+	if providerAPIType == requested {
+		return true
+	}
+	return provider == "openai" && providerAPIType == "openai" && requested == "embedding"
+}
+
+func (f *Forwarder) forwardMediaWithConnection(ctx context.Context, c store.ProviderConnection, request MediaRequest, apiType string) (*http.Response, error) {
+	endpoint, mode, err := resolveMediaEndpoint(c, request.Path, apiType)
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(request.Body))
+	if err != nil {
+		return nil, err
+	}
+	for k, values := range request.Headers {
+		if strings.EqualFold(k, "Authorization") || strings.EqualFold(k, "Host") || strings.EqualFold(k, "Content-Length") {
+			continue
+		}
+		for _, value := range values {
+			req.Header.Add(k, value)
+		}
+	}
+	if req.Header.Get("Content-Type") == "" {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	setAuthHeader(req, c, mode)
+	resp, err := f.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode == 429 || resp.StatusCode >= 500 {
+		now := time.Now()
+		until, ok := parseRateLimitReset(resp.Header, now)
+		if !ok {
+			until = now.Add(getFallbackCooldown(resp.StatusCode))
+		}
+		_, _ = io.Copy(io.Discard, resp.Body)
+		_ = resp.Body.Close()
+		_ = f.store.MarkConnectionCooldown(c.ID, until, resp.StatusCode, fmt.Sprintf("upstream %s status %d", c.Provider, resp.StatusCode))
+		return nil, fmt.Errorf("upstream %s status %d", c.Provider, resp.StatusCode)
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return resp, nil
+	}
+	if c.RateLimitedUntil != "" || c.CircuitOpenUntil != "" || c.TestStatus == "unavailable" || c.BackoffLevel > 0 || c.ConsecutiveFailures > 0 {
+		_ = f.store.ClearConnectionCooldown(c.ID)
+	}
+	resp.Header.Set("X-XRouter-Provider", c.Provider)
+	return resp, nil
+}
+
+func resolveMediaEndpoint(c store.ProviderConnection, path, apiType string) (string, string, error) {
+	entry, ok := store.GetProviderCatalogEntry(c.Provider)
+	if !ok {
+		return "", "", fmt.Errorf("provider %s missing baseUrl", c.Provider)
+	}
+	baseURL := strings.TrimRight(entry.BaseURL, "/")
+	if c.ProviderSpecificData != nil {
+		if v, ok := c.ProviderSpecificData["baseUrl"].(string); ok && strings.TrimSpace(v) != "" {
+			baseURL = strings.TrimRight(strings.TrimSpace(v), "/")
+		}
+	}
+	switch apiType {
+	case "embedding":
+		return joinOpenAIEndpoint(baseURL, "/v1/embeddings"), "openai", nil
+	case "tts":
+		return joinOpenAIEndpoint(baseURL, "/v1/audio/speech"), "openai", nil
+	case "stt":
+		if c.Provider == "deepgram" {
+			return baseURL + "/listen", "deepgram", nil
+		}
+		return joinOpenAIEndpoint(baseURL, "/v1/audio/transcriptions"), "openai", nil
+	default:
+		return "", "", fmt.Errorf("unsupported media api type")
+	}
 }
 
 func (f *Forwarder) Forward(ctx context.Context, scope, path string, requestBody []byte) (*http.Response, error) {

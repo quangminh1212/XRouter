@@ -75,6 +75,9 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/v1/messages", s.handleProxy)
 	s.mux.HandleFunc("/v1/responses", s.handleProxy)
 	s.mux.HandleFunc("/v1/search", s.handleSearch)
+	s.mux.HandleFunc("/v1/embeddings", s.handleMediaProxy)
+	s.mux.HandleFunc("/v1/audio/speech", s.handleMediaProxy)
+	s.mux.HandleFunc("/v1/audio/transcriptions", s.handleMediaProxy)
 	s.mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]interface{}{"name": "xrouter", "status": "ok", "uptimeSec": int(time.Since(s.startedAt).Seconds())})
 	})
@@ -701,6 +704,75 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = apiKey
 	writeJSON(w, http.StatusOK, result)
+}
+
+func (s *Server) handleMediaProxy(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	apiKey, err := s.authorize(r)
+	if err != nil {
+		if strings.Contains(err.Error(), "rate limit exceeded") {
+			writeJSON(w, http.StatusTooManyRequests, map[string]string{"error": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": err.Error()})
+		return
+	}
+	body, err := io.ReadAll(io.LimitReader(r.Body, 24*1024*1024))
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "failed to read body"})
+		return
+	}
+	providerHint := ""
+	contentType := strings.ToLower(r.Header.Get("Content-Type"))
+	if strings.Contains(contentType, "application/json") || r.URL.Path == "/v1/embeddings" || r.URL.Path == "/v1/audio/speech" {
+		var payload map[string]interface{}
+		if err := json.Unmarshal(body, &payload); err == nil {
+			if v, ok := payload["provider"].(string); ok {
+				providerHint = strings.TrimSpace(v)
+				delete(payload, "provider")
+			}
+			if providerHint == "" {
+				if model, ok := payload["model"].(string); ok && strings.Contains(model, "/") {
+					parts := strings.SplitN(model, "/", 2)
+					providerHint = strings.TrimSpace(parts[0])
+					payload["model"] = strings.TrimSpace(parts[1])
+				}
+			}
+			if nextBody, err := json.Marshal(payload); err == nil {
+				body = nextBody
+			}
+		}
+	}
+	resp, err := s.forwarder.ForwardMedia(r.Context(), proxy.MediaRequest{
+		Path:     r.URL.Path,
+		Body:     body,
+		Provider: providerHint,
+		Headers:  r.Header.Clone(),
+	})
+	if err != nil {
+		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+		return
+	}
+	defer resp.Body.Close()
+	for _, k := range []string{"Content-Type", "Cache-Control", "X-Request-Id", "X-XRouter-Provider"} {
+		if v := resp.Header.Get(k); v != "" {
+			w.Header().Set(k, v)
+		}
+	}
+	if w.Header().Get("Content-Type") == "" {
+		w.Header().Set("Content-Type", "application/json")
+	}
+	rawResp, readErr := io.ReadAll(io.LimitReader(resp.Body, 12*1024*1024))
+	if readErr != nil {
+		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "failed to read upstream response"})
+		return
+	}
+	w.WriteHeader(resp.StatusCode)
+	_, _ = w.Write(rawResp)
+	_ = apiKey
 }
 
 func asInt64(v interface{}) (int64, bool) {
