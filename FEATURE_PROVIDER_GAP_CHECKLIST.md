@@ -120,7 +120,7 @@ Reference repos:
 
 - [x] Basic fallback routing
 - [x] Sticky/round-robin settings fields in DB
-- [ ] Rich routing strategies like those advertised by OmniRoute
+- [x] Rich routing strategies like those advertised by OmniRoute
 - [x] Combo model system
 - [ ] Multi-account weighted round-robin / quota-aware selection
 - [ ] Provider/account-level policy assignment
