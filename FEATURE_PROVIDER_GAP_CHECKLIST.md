@@ -378,12 +378,12 @@ Legend:
 | `amazon-q` | OmniRoute | free | NO | Need adapter/auth/base URL/model transform |
 | `anthropic` | 9router, OmniRoute | apiKey, apikey | YES | Built-in/generic route |
 | `anthropic-compatible` | CLIProxyAPI | core/oauth/sdk | YES | Built-in/generic route |
-| `antigravity` | 9router, CLIProxyAPI, OmniRoute | core/oauth/sdk, oauth | NO | Need adapter/auth/base URL/model transform |
+| `antigravity` | 9router, CLIProxyAPI, OmniRoute | core/oauth/sdk, oauth | YES | Already in catalog at internal/store/db.go |
 | `apikey` | OmniRoute | cloud_agent | NO | Need adapter/auth/base URL/model transform |
 | `assemblyai` | 9router, OmniRoute | apiKey, audio_only | YES | Added STT upload/submit/poll adapter |
 | `auto` | OmniRoute | cloud_agent | NO | Need adapter/auth/base URL/model transform |
 | `aws-polly` | 9router, OmniRoute | apiKey, audio_only | YES | Added TTS catalog + AWS SigV4 signer + Polly body transform |
-| `azure` | 9router | apiKey | NO | Need adapter/auth/base URL/model transform |
+| `azure` | 9router | apiKey | YES | Already in catalog at internal/store/db.go |
 | `azure-ai` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `azure-openai` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `bailian-coding-plan` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
@@ -393,23 +393,23 @@ Legend:
 | `black-forest-labs` | 9router, OmniRoute | apiKey, apikey | YES | Added image catalog + BFL endpoint/body/header transform |
 | `blackbox` | 9router, OmniRoute | apiKey, apikey | NO | Need adapter/auth/base URL/model transform |
 | `blackbox-web` | OmniRoute | web_cookie | NO | Need adapter/auth/base URL/model transform |
-| `brave-search` | 9router, OmniRoute | apiKey, search | NO | Need adapter/auth/base URL/model transform |
-| `byteplus` | 9router | freeTier | NO | Need adapter/auth/base URL/model transform |
+| `brave-search` | 9router, OmniRoute | apiKey, search | YES | Already in catalog at internal/store/db.go |
+| `byteplus` | 9router | freeTier | YES | Already in catalog at internal/store/db.go |
 | `bytez` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `cablyai` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `cartesia` | 9router, OmniRoute | apiKey, audio_only | YES | Added TTS catalog + native endpoint/body/header transform |
-| `cerebras` | 9router, OmniRoute | apiKey, apikey | NO | Need adapter/auth/base URL/model transform |
+| `cerebras` | 9router, OmniRoute | apiKey, apikey | YES | Already in catalog at internal/store/db.go |
 | `chatgpt-web` | OmniRoute | web_cookie | YES | Added web-cookie catalog metadata + cookie-import default hydration |
 | `chutes` | 9router, OmniRoute | apiKey, apikey | YES | Added Wave 3 OpenAI-compatible catalog + fallback model |
 | `clarifai` | OmniRoute | apikey | YES | Added OpenAI-compat catalog + Authorization: Key header |
-| `claude` | 9router, CLIProxyAPI, OmniRoute | core/oauth/sdk, oauth | NO | Need adapter/auth/base URL/model transform |
+| `claude` | 9router, CLIProxyAPI, OmniRoute | core/oauth/sdk, oauth | YES | Already in catalog at internal/store/db.go |
 | `cline` | 9router, OmniRoute | oauth | NO | Need adapter/auth/base URL/model transform |
 | `cliproxyapi` | OmniRoute | upstream_proxy | NO | Need adapter/auth/base URL/model transform |
-| `cloudflare-ai` | 9router, OmniRoute | apikey, freeTier | NO | Need adapter/auth/base URL/model transform |
+| `cloudflare-ai` | 9router, OmniRoute | apikey, freeTier | YES | Already in catalog at internal/store/db.go |
 | `codestral` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
-| `codex` | 9router, CLIProxyAPI, OmniRoute | core/oauth/sdk, oauth | NO | Need adapter/auth/base URL/model transform |
+| `codex` | 9router, CLIProxyAPI, OmniRoute | core/oauth/sdk, oauth | YES | Already in catalog at internal/store/db.go |
 | `codex-cloud` | OmniRoute | cloud_agent | NO | Need adapter/auth/base URL/model transform |
-| `cohere` | 9router, OmniRoute | apiKey, apikey | NO | Need adapter/auth/base URL/model transform |
+| `cohere` | 9router, OmniRoute | apiKey, apikey | YES | Already in catalog at internal/store/db.go |
 | `comfyui` | 9router, OmniRoute | apiKey, local | NO | Need adapter/auth/base URL/model transform |
 | `command-code` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `commandcode` | 9router | apiKey | NO | Need adapter/auth/base URL/model transform |
@@ -420,9 +420,9 @@ Legend:
 | `cursor` | 9router, OmniRoute | oauth | NO | Need adapter/auth/base URL/model transform |
 | `databricks` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `datarobot` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
-| `deepgram` | 9router, OmniRoute | apiKey, audio_only | NO | Need adapter/auth/base URL/model transform |
+| `deepgram` | 9router, OmniRoute | apiKey, audio_only | YES | Already in catalog at internal/store/db.go |
 | `deepinfra` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
-| `deepseek` | 9router, OmniRoute | apiKey, apikey | NO | Need adapter/auth/base URL/model transform |
+| `deepseek` | 9router, OmniRoute | apiKey, apikey | YES | Already in catalog at internal/store/db.go |
 | `deepseek-web` | OmniRoute | web_cookie | YES | Added web-cookie catalog metadata + cookie-import default hydration |
 | `devin` | OmniRoute | cloud_agent | NO | Need adapter/auth/base URL/model transform |
 | `devin-cli` | OmniRoute | oauth | NO | Need adapter/auth/base URL/model transform |
@@ -431,29 +431,29 @@ Legend:
 | `elevenlabs` | 9router, OmniRoute | apiKey, audio_only | YES | Added TTS catalog + native endpoint/body/header transform |
 | `empower` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `enally` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
-| `exa` | 9router | apiKey | NO | Need adapter/auth/base URL/model transform |
+| `exa` | 9router | apiKey | YES | Already in catalog at internal/store/db.go |
 | `exa-search` | OmniRoute | search | YES | Added search catalog alias + reused existing Exa search adapter |
 | `fal-ai` | 9router, OmniRoute | apiKey, apikey | NO | Need adapter/auth/base URL/model transform |
 | `featherless-ai` | OmniRoute | apikey | YES | Added Wave 3 OpenAI-compatible catalog + fallback model |
 | `fenayai` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `firecrawl` | 9router | apiKey | NO | Need adapter/auth/base URL/model transform |
-| `fireworks` | 9router, OmniRoute | apiKey, apikey | NO | Need adapter/auth/base URL/model transform |
+| `fireworks` | 9router, OmniRoute | apiKey, apikey | YES | Already in catalog at internal/store/db.go |
 | `freetheai` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `friendliai` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `galadriel` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
-| `gemini` | 9router, CLIProxyAPI, OmniRoute | apikey, core/oauth/sdk, freeTier | NO | Need adapter/auth/base URL/model transform |
-| `gemini-cli` | 9router, OmniRoute | free | NO | Need adapter/auth/base URL/model transform |
+| `gemini` | 9router, CLIProxyAPI, OmniRoute | apikey, core/oauth/sdk, freeTier | YES | Already in catalog at internal/store/db.go |
+| `gemini-cli` | 9router, OmniRoute | free | YES | Already in catalog at internal/store/db.go |
 | `gemini-web` | OmniRoute | web_cookie | YES | Added web-cookie catalog metadata + cookie-import default hydration |
 | `getgoapi` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `gigachat` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
-| `github` | 9router, OmniRoute | oauth | NO | Need adapter/auth/base URL/model transform |
+| `github` | 9router, OmniRoute | oauth | YES | Already in catalog at internal/store/db.go |
 | `github-models` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `gitlab` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `gitlab-duo` | OmniRoute | oauth | NO | Need adapter/auth/base URL/model transform |
 | `gitlawb` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `gitlawb-gmi` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `glhf` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
-| `glm` | 9router, OmniRoute | apiKey, apikey | NO | Need adapter/auth/base URL/model transform |
+| `glm` | 9router, OmniRoute | apiKey, apikey | YES | Already in catalog at internal/store/db.go |
 | `glm-cn` | 9router, OmniRoute | apiKey, apikey | YES | Added Wave 3 OpenAI-compatible catalog + fallback model |
 | `glmt` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `google-pse` | 9router | apiKey | NO | Need adapter/auth/base URL/model transform |
@@ -461,22 +461,22 @@ Legend:
 | `google-tts` | 9router | apiKey | NO | Need adapter/auth/base URL/model transform |
 | `grok` | CLIProxyAPI | core/oauth/sdk | YES | Added OAuth catalog alias to xAI flow + fallback model |
 | `grok-web` | 9router, OmniRoute | webCookie, web_cookie | YES | Added web-cookie catalog metadata + cookie-import default hydration |
-| `groq` | 9router, OmniRoute | apiKey, apikey | NO | Need adapter/auth/base URL/model transform |
+| `groq` | 9router, OmniRoute | apiKey, apikey | YES | Already in catalog at internal/store/db.go |
 | `hackclub` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `haiper` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `heroku` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
-| `huggingface` | 9router, OmniRoute | apiKey, apikey | NO | Need adapter/auth/base URL/model transform |
+| `huggingface` | 9router, OmniRoute | apiKey, apikey | YES | Already in catalog at internal/store/db.go |
 | `hyperbolic` | 9router, OmniRoute | apiKey, apikey | YES | Added Wave 3 OpenAI-compatible catalog + fallback model |
 | `ideogram` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `inference-net` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `inworld` | 9router, OmniRoute | apiKey, audio_only | NO | Need adapter/auth/base URL/model transform |
-| `jina-ai` | 9router, OmniRoute | apiKey, apikey | NO | Need adapter/auth/base URL/model transform |
+| `jina-ai` | 9router, OmniRoute | apiKey, apikey | YES | Already in catalog at internal/store/db.go |
 | `jina-reader` | 9router | apiKey | NO | Need adapter/auth/base URL/model transform |
 | `jules` | OmniRoute | cloud_agent | NO | Need adapter/auth/base URL/model transform |
 | `kie` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `kilo-gateway` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `kilocode` | 9router, OmniRoute | oauth | NO | Need adapter/auth/base URL/model transform |
-| `kimi` | 9router, CLIProxyAPI, OmniRoute | apiKey, apikey, core/oauth/sdk | NO | Need adapter/auth/base URL/model transform |
+| `kimi` | 9router, CLIProxyAPI, OmniRoute | apiKey, apikey, core/oauth/sdk | YES | Already in catalog at internal/store/db.go |
 | `kimi-coding` | OmniRoute | oauth | NO | Need adapter/auth/base URL/model transform |
 | `kimi-coding-apikey` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `kiro` | 9router, OmniRoute | free | YES | Added Wave 3 OpenAI-compatible catalog + fallback model |
@@ -497,21 +497,21 @@ Legend:
 | `longcat` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `maritalk` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `meta-llama` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
-| `minimax` | 9router, OmniRoute | apiKey, apikey | NO | Need adapter/auth/base URL/model transform |
+| `minimax` | 9router, OmniRoute | apiKey, apikey | YES | Already in catalog at internal/store/db.go |
 | `minimax-cn` | 9router, OmniRoute | apiKey, apikey | YES | Added Wave 3 OpenAI-compatible catalog + fallback model |
-| `mistral` | 9router, OmniRoute | apiKey, apikey | NO | Need adapter/auth/base URL/model transform |
+| `mistral` | 9router, OmniRoute | apiKey, apikey | YES | Already in catalog at internal/store/db.go |
 | `modal` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `moonshot` | OmniRoute | apikey | YES | Added Wave 3 OpenAI-compatible catalog + fallback model |
 | `morph` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `muse-spark-web` | OmniRoute | web_cookie | NO | Need adapter/auth/base URL/model transform |
 | `nanobanana` | 9router, OmniRoute | apiKey, apikey | NO | Need adapter/auth/base URL/model transform |
 | `nanogpt` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
-| `nebius` | 9router, OmniRoute | apiKey, apikey | NO | Need adapter/auth/base URL/model transform |
+| `nebius` | 9router, OmniRoute | apiKey, apikey | YES | Already in catalog at internal/store/db.go |
 | `nlpcloud` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `nous-research` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `novita` | OmniRoute | apikey | YES | Added Wave 3 OpenAI-compatible catalog + fallback model |
 | `nscale` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
-| `nvidia` | 9router, OmniRoute | apikey, freeTier | NO | Need adapter/auth/base URL/model transform |
+| `nvidia` | 9router, OmniRoute | apikey, freeTier | YES | Already in catalog at internal/store/db.go |
 | `oauth` | OmniRoute | cloud_agent | NO | Need adapter/auth/base URL/model transform |
 | `oci` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `ollama` | 9router | freeTier | NO | Need adapter/auth/base URL/model transform |
@@ -526,7 +526,7 @@ Legend:
 | `opencode-zen` | OmniRoute | apikey | YES | Added Wave 3 OpenAI-compatible catalog + fallback model |
 | `openrouter` | 9router, OmniRoute | apikey, freeTier | YES | Built-in/generic route |
 | `ovhcloud` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
-| `perplexity` | 9router, OmniRoute | apiKey, apikey | NO | Need adapter/auth/base URL/model transform |
+| `perplexity` | 9router, OmniRoute | apiKey, apikey | YES | Already in catalog at internal/store/db.go |
 | `perplexity-search` | OmniRoute | search | YES | Search provider catalog + adapter already present |
 | `perplexity-web` | 9router, OmniRoute | webCookie, web_cookie | YES | Added web-cookie catalog metadata + cookie-import default hydration |
 | `petals` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
@@ -554,7 +554,7 @@ Legend:
 | `searxng-search` | OmniRoute | search | NO | Need adapter/auth/base URL/model transform |
 | `serper` | 9router | apiKey | YES | Search provider catalog + adapter already present |
 | `serper-search` | OmniRoute | search | YES | Added search catalog alias + reused existing Serper adapter |
-| `siliconflow` | 9router, OmniRoute | apiKey, apikey | NO | Need adapter/auth/base URL/model transform |
+| `siliconflow` | 9router, OmniRoute | apiKey, apikey | YES | Already in catalog at internal/store/db.go |
 | `snowflake` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `stability-ai` | 9router, OmniRoute | apiKey, apikey | NO | Need adapter/auth/base URL/model transform |
 | `suno` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
@@ -563,7 +563,7 @@ Legend:
 | `tavily` | 9router | apiKey | YES | Search provider catalog + adapter already present |
 | `tavily-search` | OmniRoute | search | YES | Added search catalog alias + reused existing Tavily adapter |
 | `thebai` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
-| `together` | 9router, OmniRoute | apiKey, apikey | NO | Need adapter/auth/base URL/model transform |
+| `together` | 9router, OmniRoute | apiKey, apikey | YES | Already in catalog at internal/store/db.go |
 | `topaz` | 9router, OmniRoute | apiKey, apikey | NO | Need adapter/auth/base URL/model transform |
 | `tortoise` | 9router | apiKey | NO | Need adapter/auth/base URL/model transform |
 | `trae` | OmniRoute | oauth | NO | Need adapter/auth/base URL/model transform |
@@ -574,17 +574,17 @@ Legend:
 | `v0-vercel` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `venice` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `veoaifree-web` | OmniRoute | web_cookie | NO | Need adapter/auth/base URL/model transform |
-| `vercel-ai-gateway` | 9router, OmniRoute | apiKey, apikey | NO | Need adapter/auth/base URL/model transform |
-| `vertex` | 9router, CLIProxyAPI, OmniRoute | apikey, core/oauth/sdk, freeTier | NO | Need adapter/auth/base URL/model transform |
+| `vercel-ai-gateway` | 9router, OmniRoute | apiKey, apikey | YES | Already in catalog at internal/store/db.go |
+| `vertex` | 9router, CLIProxyAPI, OmniRoute | apikey, core/oauth/sdk, freeTier | YES | Already in catalog at internal/store/db.go |
 | `vertex-partner` | 9router, OmniRoute | apiKey, apikey | NO | Need adapter/auth/base URL/model transform |
 | `vllm` | OmniRoute | local | NO | Need adapter/auth/base URL/model transform |
 | `volcengine` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `volcengine-ark` | 9router | apiKey | NO | Need adapter/auth/base URL/model transform |
-| `voyage-ai` | 9router, OmniRoute | apiKey, apikey | NO | Need adapter/auth/base URL/model transform |
+| `voyage-ai` | 9router, OmniRoute | apiKey, apikey | YES | Already in catalog at internal/store/db.go |
 | `wandb` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `watsonx` | OmniRoute | apikey | NO | Need adapter/auth/base URL/model transform |
 | `windsurf` | OmniRoute | oauth | NO | Need adapter/auth/base URL/model transform |
-| `xai` | 9router, CLIProxyAPI, OmniRoute | apiKey, apikey, core/oauth/sdk | NO | Need adapter/auth/base URL/model transform |
+| `xai` | 9router, CLIProxyAPI, OmniRoute | apiKey, apikey, core/oauth/sdk | YES | Already in catalog at internal/store/db.go |
 | `xiaomi-mimo` | 9router, OmniRoute | apiKey, apikey | NO | Need adapter/auth/base URL/model transform |
 | `xiaomi-tokenplan` | 9router | apiKey | NO | Need adapter/auth/base URL/model transform |
 | `xinference` | OmniRoute | local | NO | Need adapter/auth/base URL/model transform |
