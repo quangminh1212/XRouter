@@ -186,6 +186,78 @@ func TestLegacyProvidersStillProxyChatCompletions(t *testing.T) {
 	}
 }
 
+func TestGenericCompatibleProviderAdapters(t *testing.T) {
+	tests := []struct {
+		provider     string
+		apiType      string
+		model        string
+		wantPath     string
+		wantUpstream string
+		response     map[string]interface{}
+	}{
+		{
+			provider: "openai-compatible", apiType: "openai", model: "openai-compatible/gpt-test",
+			wantPath:     "/v1/chat/completions",
+			wantUpstream: "gpt-test",
+			response:     map[string]interface{}{"id": "chatcmpl-openai", "choices": []map[string]interface{}{{"message": map[string]string{"role": "assistant", "content": "openai ok"}}}},
+		},
+		{
+			provider: "anthropic-compatible", apiType: "anthropic", model: "anthropic-compatible/claude-test",
+			wantPath:     "/v1/messages",
+			wantUpstream: "claude-test",
+			response:     map[string]interface{}{"id": "msg-anthropic", "content": []map[string]string{{"type": "text", "text": "anthropic ok"}}},
+		},
+		{
+			provider: "gemini-compatible", apiType: "gemini", model: "gemini-compatible/gemini-test",
+			wantPath:     "/v1beta/models/gemini-test:generateContent",
+			wantUpstream: "",
+			response: map[string]interface{}{"candidates": []map[string]interface{}{{
+				"content":      map[string]interface{}{"role": "model", "parts": []map[string]string{{"text": "gemini ok"}}},
+				"finishReason": "STOP",
+			}}},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.provider, func(t *testing.T) {
+			srv := newTestServer(t)
+			_, _ = srv.store.UpdateSettings(map[string]interface{}{"requireApiKey": false})
+			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != tt.wantPath {
+					t.Fatalf("unexpected upstream path: %s", r.URL.Path)
+				}
+				var body map[string]interface{}
+				if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+					t.Fatalf("decode body: %v", err)
+				}
+				if tt.wantUpstream != "" && body["model"] != tt.wantUpstream {
+					t.Fatalf("unexpected upstream model: %#v", body["model"])
+				}
+				if tt.apiType == "gemini" {
+					if _, ok := body["contents"].([]interface{}); !ok {
+						t.Fatalf("expected gemini contents, got %#v", body)
+					}
+				}
+				writeJSON(w, http.StatusOK, tt.response)
+			}))
+			defer upstream.Close()
+			_, err := srv.store.CreateProviderConnection(store.ProviderConnection{
+				Provider: tt.provider, Name: tt.provider + " adapter", AuthType: "apikey", APIKey: "x", IsActive: true,
+				ProviderSpecificData: map[string]interface{}{"baseUrl": upstream.URL, "apiType": tt.apiType},
+			})
+			if err != nil {
+				t.Fatalf("create connection: %v", err)
+			}
+			req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", bytes.NewBufferString(`{"model":"`+tt.model+`","messages":[{"role":"user","content":"hello"}]}`))
+			req.Header.Set("Content-Type", "application/json")
+			rec := httptest.NewRecorder()
+			srv.ServeHTTP(rec, req)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
+			}
+		})
+	}
+}
+
 func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }

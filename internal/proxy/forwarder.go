@@ -151,6 +151,9 @@ func resolveEndpoint(c store.ProviderConnection, model, path string) (string, st
 			return "", "", fmt.Errorf("provider %s missing baseUrl", c.Provider)
 		}
 	}
+	if baseURL == "" {
+		return "", "", fmt.Errorf("provider %s missing baseUrl", c.Provider)
+	}
 
 	if path == "/v1/responses" || path == "/v1/responses/compact" || path == "/v1/responses/stream" || path == "/backend-api/codex/responses" || apiType == "responses" {
 		return joinOpenAIEndpoint(baseURL, "/responses"), "openai", nil
@@ -161,6 +164,9 @@ func resolveEndpoint(c store.ProviderConnection, model, path string) (string, st
 	if path == "/v1/messages/count_tokens" {
 		return joinOpenAIEndpoint(baseURL, "/v1/messages/count_tokens"), "anthropic", nil
 	}
+	if apiType == "gemini" {
+		return buildGeminiEndpoint(baseURL, model, path)
+	}
 	if apiType == "anthropic" {
 		return joinOpenAIEndpoint(baseURL, "/v1/messages"), "anthropic", nil
 	}
@@ -168,6 +174,21 @@ func resolveEndpoint(c store.ProviderConnection, model, path string) (string, st
 		return joinOpenAIEndpoint(baseURL, "/v1/messages"), "anthropic", nil
 	}
 	return joinOpenAIEndpoint(baseURL, "/v1/chat/completions"), "openai", nil
+}
+
+func buildGeminiEndpoint(baseURL, model, path string) (string, string, error) {
+	if path != "/v1/chat/completions" {
+		return "", "", fmt.Errorf("gemini-compatible adapter only supports /v1/chat/completions")
+	}
+	model = strings.TrimSpace(model)
+	if model == "" {
+		model = "gemini-1.5-flash"
+	}
+	if strings.Contains(model, "/") {
+		parts := strings.SplitN(model, "/", 2)
+		model = strings.TrimSpace(parts[1])
+	}
+	return strings.TrimRight(baseURL, "/") + "/v1beta/models/" + model + ":generateContent", "gemini", nil
 }
 
 func joinOpenAIEndpoint(baseURL, path string) string {
@@ -193,6 +214,12 @@ func setAuthHeader(req *http.Request, c store.ProviderConnection, mode string) {
 	}
 	if mode == "anthropic" {
 		req.Header.Set("anthropic-version", "2023-06-01")
+	}
+	if mode == "gemini" {
+		req.Header.Set("x-goog-api-key", c.APIKey)
+		if c.APIKey != "" {
+			req.Header.Del("Authorization")
+		}
 	}
 	if mode == "deepgram" && c.APIKey != "" {
 		req.Header.Set("Authorization", "Token "+c.APIKey)
@@ -276,6 +303,132 @@ func normalizeModelForUpstream(body map[string]interface{}, providerHint string)
 	}
 	raw, _ := json.Marshal(body)
 	return raw
+}
+
+func normalizeBodyForMode(body map[string]interface{}, providerHint, mode string) []byte {
+	if mode == "gemini" {
+		return normalizeOpenAIToGeminiBody(body, providerHint)
+	}
+	return normalizeModelForUpstream(body, providerHint)
+}
+
+func normalizeOpenAIToGeminiBody(body map[string]interface{}, providerHint string) []byte {
+	if providerHint != "" {
+		if model, ok := body["model"].(string); ok && strings.HasPrefix(model, providerHint+"/") {
+			body["model"] = strings.TrimPrefix(model, providerHint+"/")
+		}
+	}
+	out := map[string]interface{}{}
+	if messages, ok := body["messages"].([]interface{}); ok {
+		contents := make([]map[string]interface{}, 0, len(messages))
+		for _, raw := range messages {
+			item, _ := raw.(map[string]interface{})
+			role := "user"
+			if v, ok := item["role"].(string); ok && strings.TrimSpace(v) != "" {
+				switch strings.ToLower(strings.TrimSpace(v)) {
+				case "assistant", "model":
+					role = "model"
+				default:
+					role = "user"
+				}
+			}
+			parts := make([]map[string]string, 0, 1)
+			switch content := item["content"].(type) {
+			case string:
+				if strings.TrimSpace(content) != "" {
+					parts = append(parts, map[string]string{"text": content})
+				}
+			case []interface{}:
+				for _, rawPart := range content {
+					part, _ := rawPart.(map[string]interface{})
+					if text, ok := part["text"].(string); ok && strings.TrimSpace(text) != "" {
+						parts = append(parts, map[string]string{"text": text})
+					}
+				}
+			}
+			if len(parts) == 0 {
+				continue
+			}
+			contents = append(contents, map[string]interface{}{"role": role, "parts": parts})
+		}
+		out["contents"] = contents
+	}
+	cfg := map[string]interface{}{}
+	if v, ok := body["max_tokens"]; ok {
+		cfg["maxOutputTokens"] = v
+	}
+	if v, ok := body["temperature"]; ok {
+		cfg["temperature"] = v
+	}
+	if len(cfg) > 0 {
+		out["generationConfig"] = cfg
+	}
+	raw, _ := json.Marshal(out)
+	return raw
+}
+
+func normalizeResponseForMode(resp *http.Response, mode string) (*http.Response, error) {
+	if mode != "gemini" {
+		return resp, nil
+	}
+	defer resp.Body.Close()
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, 8*1024*1024))
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		resp.Body = io.NopCloser(bytes.NewReader(raw))
+		return resp, nil
+	}
+	var payload map[string]interface{}
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		resp.Body = io.NopCloser(bytes.NewReader(raw))
+		return resp, nil
+	}
+	normalized := normalizeGeminiToOpenAIResponse(payload)
+	body, _ := json.Marshal(normalized)
+	headers := cloneHeader(resp.Header)
+	headers.Set("Content-Type", "application/json")
+	return cloneResponse(resp.StatusCode, headers, body), nil
+}
+
+func normalizeGeminiToOpenAIResponse(raw map[string]interface{}) map[string]interface{} {
+	text := ""
+	finishReason := "stop"
+	if candidates, ok := raw["candidates"].([]interface{}); ok && len(candidates) > 0 {
+		if candidate, ok := candidates[0].(map[string]interface{}); ok {
+			if v, ok := candidate["finishReason"].(string); ok && strings.TrimSpace(v) != "" {
+				finishReason = strings.ToLower(strings.TrimSpace(v))
+			}
+			if content, ok := candidate["content"].(map[string]interface{}); ok {
+				if parts, ok := content["parts"].([]interface{}); ok {
+					chunks := make([]string, 0, len(parts))
+					for _, rawPart := range parts {
+						part, _ := rawPart.(map[string]interface{})
+						if v, ok := part["text"].(string); ok && strings.TrimSpace(v) != "" {
+							chunks = append(chunks, v)
+						}
+					}
+					text = strings.Join(chunks, "\n")
+				}
+			}
+		}
+	}
+	return map[string]interface{}{
+		"id":      "chatcmpl-gemini-compatible",
+		"object":  "chat.completion",
+		"created": time.Now().Unix(),
+		"choices": []map[string]interface{}{
+			{
+				"index": 0,
+				"message": map[string]string{
+					"role":    "assistant",
+					"content": text,
+				},
+				"finish_reason": finishReason,
+			},
+		},
+	}
 }
 
 func cloneRequestBody(body map[string]interface{}) map[string]interface{} {
@@ -1421,12 +1574,12 @@ func (f *Forwarder) Forward(ctx context.Context, scope, path string, requestBody
 		if effectiveModel != "" {
 			effectiveBody["model"] = effectiveModel
 		}
-		connectionBody := normalizeModelForUpstream(effectiveBody, c.Provider)
 		endpoint, mode, err := resolveEndpoint(c, effectiveModel, path)
 		if err != nil {
 			lastErr = err
 			continue
 		}
+		connectionBody := normalizeBodyForMode(effectiveBody, c.Provider, mode)
 
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(connectionBody))
 		if err != nil {
@@ -1485,6 +1638,11 @@ func (f *Forwarder) Forward(ctx context.Context, scope, path string, requestBody
 		}
 		if c.RateLimitedUntil != "" || c.CircuitOpenUntil != "" || c.TestStatus == "unavailable" || c.BackoffLevel > 0 || c.ConsecutiveFailures > 0 {
 			_ = f.store.ClearConnectionCooldown(c.ID)
+		}
+		resp, err = normalizeResponseForMode(resp, mode)
+		if err != nil {
+			lastErr = err
+			continue
 		}
 		resp.Header.Set("X-XRouter-Provider", c.Provider)
 		resp.Header.Set("X-XRouter-Connection-Id", c.ID)
@@ -1586,8 +1744,12 @@ func (f *Forwarder) forwardDirect(ctx context.Context, path string, upstreamBody
 			lastErr = err
 			continue
 		}
+		connectionBody := upstreamBody
+		if len(body) > 0 {
+			connectionBody = normalizeBodyForMode(cloneRequestBody(body), c.Provider, mode)
+		}
 
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(upstreamBody))
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(connectionBody))
 		if err != nil {
 			lastErr = err
 			continue
@@ -1615,6 +1777,11 @@ func (f *Forwarder) forwardDirect(ctx context.Context, path string, upstreamBody
 		}
 		if c.RateLimitedUntil != "" || c.CircuitOpenUntil != "" || c.TestStatus == "unavailable" || c.BackoffLevel > 0 || c.ConsecutiveFailures > 0 {
 			_ = f.store.ClearConnectionCooldown(c.ID)
+		}
+		resp, err = normalizeResponseForMode(resp, mode)
+		if err != nil {
+			lastErr = err
+			continue
 		}
 		resp.Header.Set("X-XRouter-Provider", c.Provider)
 		resp.Header.Set("X-XRouter-Connection-Id", c.ID)

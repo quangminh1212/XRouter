@@ -154,7 +154,7 @@ Reference repos:
 
 ### P1 - should implement first
 
-- [ ] Add generic provider adapters for OpenAI-compatible, Anthropic-compatible, and Gemini-compatible upstreams
+- [x] Add generic provider adapters for OpenAI-compatible, Anthropic-compatible, and Gemini-compatible upstreams
 - [x] Add `POST /v1/completions`
 - [x] Add `POST /v1/embeddings`
 - [x] Add `POST /v1/images/generations`
