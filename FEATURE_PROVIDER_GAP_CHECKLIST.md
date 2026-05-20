@@ -94,7 +94,7 @@ Reference repos:
 - [x] Model availability checks
 - [x] Routing strategy management
 - [x] Retry/max retry interval management
-- [ ] OAuth excluded models / model alias controls
+- [x] OAuth excluded models / model alias controls
 - [ ] Auth file upload/download/index flows
 - [ ] Vertex credential import flow
 - [ ] Proxy pools / upstream pool manager
