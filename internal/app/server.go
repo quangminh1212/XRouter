@@ -88,6 +88,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/keys/", s.handleAPIKeyByID)
 	s.mux.HandleFunc("/api/models", s.handleModels)
 	s.mux.HandleFunc("/api/management/model-mappings", s.handleManagementModelMappings)
+	s.mux.HandleFunc("/api/management/model-aliases", s.handleManagementModelAliases)
 	s.mux.HandleFunc("/api/quota", s.handleQuota)
 	s.mux.HandleFunc("/api/usage/summary", s.handleQuota)
 	s.mux.HandleFunc("/api/usage/stats", s.handleUsageStats)
@@ -1016,6 +1017,62 @@ func (s *Server) handleManagementModelMappings(w http.ResponseWriter, r *http.Re
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]interface{}{"success": true, "mappings": mappings})
+	default:
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+	}
+}
+
+func (s *Server) handleManagementModelAliases(w http.ResponseWriter, r *http.Request) {
+	if !isLocalOnlyRequest(r) {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "management api is restricted to localhost"})
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		writeJSON(w, http.StatusOK, map[string]interface{}{"aliases": s.store.GetModelAliases()})
+	case http.MethodPut:
+		var body struct {
+			Aliases map[string]string `json:"aliases"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+			return
+		}
+		aliases, err := s.store.ReplaceModelAliases(body.Aliases)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{"success": true, "aliases": aliases})
+	case http.MethodPatch:
+		var body struct {
+			Aliases map[string]string `json:"aliases"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+			return
+		}
+		aliases, err := s.store.PatchModelAliases(body.Aliases)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{"success": true, "aliases": aliases})
+	case http.MethodDelete:
+		var body struct {
+			Models []string `json:"models"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil && err != io.EOF {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+			return
+		}
+		aliases, err := s.store.DeleteModelAliasKeys(body.Models)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{"success": true, "aliases": aliases})
 	default:
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
 	}

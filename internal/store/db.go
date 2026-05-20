@@ -780,6 +780,75 @@ func (s *Store) GetModelAliases() map[string]string {
 	return out
 }
 
+func sanitizeAliases(input map[string]string) map[string]string {
+	out := map[string]string{}
+	for fullModel, alias := range input {
+		k := strings.TrimSpace(fullModel)
+		v := strings.TrimSpace(alias)
+		if k == "" || v == "" {
+			continue
+		}
+		out[k] = v
+	}
+	return out
+}
+
+func (s *Store) ReplaceModelAliases(aliases map[string]string) (map[string]string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.db.ModelAliases = sanitizeAliases(aliases)
+	if err := s.persistLocked(); err != nil {
+		return nil, err
+	}
+	out := make(map[string]string, len(s.db.ModelAliases))
+	for k, v := range s.db.ModelAliases {
+		out[k] = v
+	}
+	return out, nil
+}
+
+func (s *Store) PatchModelAliases(aliases map[string]string) (map[string]string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.db.ModelAliases == nil {
+		s.db.ModelAliases = map[string]string{}
+	}
+	for k, v := range sanitizeAliases(aliases) {
+		s.db.ModelAliases[k] = v
+	}
+	if err := s.persistLocked(); err != nil {
+		return nil, err
+	}
+	out := make(map[string]string, len(s.db.ModelAliases))
+	for k, v := range s.db.ModelAliases {
+		out[k] = v
+	}
+	return out, nil
+}
+
+func (s *Store) DeleteModelAliasKeys(fullModels []string) (map[string]string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.db.ModelAliases == nil {
+		s.db.ModelAliases = map[string]string{}
+	}
+	for _, key := range fullModels {
+		trimmed := strings.TrimSpace(key)
+		if trimmed == "" {
+			continue
+		}
+		delete(s.db.ModelAliases, trimmed)
+	}
+	if err := s.persistLocked(); err != nil {
+		return nil, err
+	}
+	out := make(map[string]string, len(s.db.ModelAliases))
+	for k, v := range s.db.ModelAliases {
+		out[k] = v
+	}
+	return out, nil
+}
+
 func sanitizeMappings(input map[string]string) map[string]string {
 	out := map[string]string{}
 	for source, target := range input {
