@@ -141,6 +141,9 @@ func resolveEndpoint(c store.ProviderConnection, model, path string) (string, st
 			apiType = strings.ToLower(strings.TrimSpace(v))
 		}
 	}
+	if c.Provider == "azure" {
+		return resolveAzureEndpoint(c, model, path)
+	}
 	if baseURL == "" {
 		if entry, ok := store.GetProviderCatalogEntry(c.Provider); ok {
 			baseURL = strings.TrimRight(entry.BaseURL, "/")
@@ -153,6 +156,10 @@ func resolveEndpoint(c store.ProviderConnection, model, path string) (string, st
 	}
 	if baseURL == "" {
 		return "", "", fmt.Errorf("provider %s missing baseUrl", c.Provider)
+	}
+	baseURL = resolveBaseURL(c, baseURL)
+	if strings.Contains(baseURL, "{") {
+		return "", "", fmt.Errorf("provider %s missing baseUrl variables", c.Provider)
 	}
 
 	if path == "/v1/responses" || path == "/v1/responses/compact" || path == "/v1/responses/stream" || path == "/backend-api/codex/responses" || apiType == "responses" {
@@ -174,6 +181,83 @@ func resolveEndpoint(c store.ProviderConnection, model, path string) (string, st
 		return joinOpenAIEndpoint(baseURL, "/v1/messages"), "anthropic", nil
 	}
 	return joinOpenAIEndpoint(baseURL, "/v1/chat/completions"), "openai", nil
+}
+
+func resolveAzureEndpoint(c store.ProviderConnection, model, path string) (string, string, error) {
+	endpoint := providerDataString(c, "azureEndpoint")
+	if endpoint == "" {
+		endpoint = providerDataString(c, "baseUrl")
+	}
+	if endpoint == "" {
+		return "", "", fmt.Errorf("provider azure missing azureEndpoint")
+	}
+	deployment := providerDataString(c, "deployment")
+	if deployment == "" {
+		deployment = providerDataString(c, "azureDeployment")
+	}
+	if deployment == "" {
+		deployment = strings.TrimSpace(model)
+		if strings.Contains(deployment, "/") {
+			parts := strings.SplitN(deployment, "/", 2)
+			deployment = strings.TrimSpace(parts[1])
+		}
+	}
+	if deployment == "" {
+		return "", "", fmt.Errorf("provider azure missing deployment")
+	}
+	apiVersion := providerDataString(c, "apiVersion")
+	if apiVersion == "" {
+		apiVersion = providerDataString(c, "azureApiVersion")
+	}
+	if apiVersion == "" {
+		apiVersion = "2024-10-21"
+	}
+	operation := "/chat/completions"
+	switch path {
+	case "/v1/completions":
+		operation = "/completions"
+	case "/v1/embeddings":
+		operation = "/embeddings"
+	}
+	return strings.TrimRight(endpoint, "/") + "/openai/deployments/" + url.PathEscape(deployment) + operation + "?api-version=" + url.QueryEscape(apiVersion), "openai", nil
+}
+
+func providerDataString(c store.ProviderConnection, key string) string {
+	if c.ProviderSpecificData == nil {
+		return ""
+	}
+	value, ok := c.ProviderSpecificData[key]
+	if !ok || value == nil {
+		return ""
+	}
+	switch v := value.(type) {
+	case string:
+		return strings.TrimSpace(v)
+	default:
+		text := strings.TrimSpace(fmt.Sprint(v))
+		if text == "<nil>" {
+			return ""
+		}
+		return text
+	}
+}
+
+func resolveBaseURL(c store.ProviderConnection, baseURL string) string {
+	baseURL = strings.TrimRight(strings.TrimSpace(baseURL), "/")
+	if !strings.Contains(baseURL, "{") {
+		return baseURL
+	}
+	if c.ProviderSpecificData == nil {
+		return baseURL
+	}
+	for _, key := range []string{"accountId", "azureEndpoint", "deployment"} {
+		value := providerDataString(c, key)
+		if value == "" {
+			continue
+		}
+		baseURL = strings.ReplaceAll(baseURL, "{"+key+"}", value)
+	}
+	return baseURL
 }
 
 func buildGeminiEndpoint(baseURL, model, path string) (string, string, error) {
@@ -230,6 +314,10 @@ func setAuthHeader(req *http.Request, c store.ProviderConnection, mode string) {
 	}
 	if c.APIKey != "" {
 		req.Header.Set("Authorization", "Bearer "+c.APIKey)
+	}
+	if c.Provider == "azure" && c.APIKey != "" {
+		req.Header.Set("api-key", c.APIKey)
+		req.Header.Del("Authorization")
 	}
 	if c.AccessToken != "" && c.APIKey == "" {
 		req.Header.Set("Authorization", "Bearer "+c.AccessToken)
@@ -762,10 +850,10 @@ func (f *Forwarder) searchWithConnection(ctx context.Context, c store.ProviderCo
 	if !ok || entry.APIType != "search" {
 		return SearchResponse{}, fmt.Errorf("provider %s is not a search provider", c.Provider)
 	}
-	baseURL := strings.TrimRight(entry.BaseURL, "/")
+	baseURL := resolveBaseURL(c, entry.BaseURL)
 	if c.ProviderSpecificData != nil {
 		if v, ok := c.ProviderSpecificData["baseUrl"].(string); ok && strings.TrimSpace(v) != "" {
-			baseURL = strings.TrimRight(strings.TrimSpace(v), "/")
+			baseURL = resolveBaseURL(c, v)
 		}
 	}
 	req, err := buildSearchRequest(ctx, c, baseURL, query, maxResults)
@@ -948,10 +1036,10 @@ func (f *Forwarder) fetchProviderModels(ctx context.Context, c store.ProviderCon
 	if !ok {
 		return nil, "", fmt.Errorf("unknown provider %s", c.Provider)
 	}
-	baseURL := strings.TrimRight(entry.BaseURL, "/")
+	baseURL := resolveBaseURL(c, entry.BaseURL)
 	if c.ProviderSpecificData != nil {
 		if v, ok := c.ProviderSpecificData["baseUrl"].(string); ok && strings.TrimSpace(v) != "" {
-			baseURL = strings.TrimRight(strings.TrimSpace(v), "/")
+			baseURL = resolveBaseURL(c, v)
 		}
 	}
 	modelsURL := joinOpenAIEndpoint(baseURL, "/v1/models")
@@ -1047,10 +1135,10 @@ func (f *Forwarder) ProbeConnection(ctx context.Context, c store.ProviderConnect
 	if !ok {
 		return ProbeResult{}, fmt.Errorf("unknown provider %s", c.Provider)
 	}
-	baseURL := strings.TrimRight(entry.BaseURL, "/")
+	baseURL := resolveBaseURL(c, entry.BaseURL)
 	if c.ProviderSpecificData != nil {
 		if v, ok := c.ProviderSpecificData["baseUrl"].(string); ok && strings.TrimSpace(v) != "" {
-			baseURL = strings.TrimRight(strings.TrimSpace(v), "/")
+			baseURL = resolveBaseURL(c, v)
 		}
 	}
 	targetURL, method, body := probeRequestForProvider(entry, baseURL, c.DefaultModel)
@@ -1105,10 +1193,10 @@ func (f *Forwarder) ProbeModels(ctx context.Context, c store.ProviderConnection,
 	if !ok {
 		return nil, fmt.Errorf("unknown provider %s", c.Provider)
 	}
-	baseURL := strings.TrimRight(entry.BaseURL, "/")
+	baseURL := resolveBaseURL(c, entry.BaseURL)
 	if c.ProviderSpecificData != nil {
 		if v, ok := c.ProviderSpecificData["baseUrl"].(string); ok && strings.TrimSpace(v) != "" {
-			baseURL = strings.TrimRight(strings.TrimSpace(v), "/")
+			baseURL = resolveBaseURL(c, v)
 		}
 	}
 	results := make([]ProbeResult, 0, len(models))

@@ -28,11 +28,13 @@ func TestProviderCatalogEndpoint(t *testing.T) {
 		t.Fatalf("expected providers in catalog: %#v", payload)
 	}
 	expected := map[string]string{
+		"azure":          "",
 		"nvidia":         "https://integrate.api.nvidia.com/v1",
 		"moonshot":       "https://api.moonshot.ai/v1",
 		"qwen":           "https://dashscope.aliyuncs.com/compatible-mode/v1",
 		"hyperbolic":     "https://api.hyperbolic.xyz/v1",
 		"byteplus":       "https://ark.ap-southeast.bytepluses.com/api/coding/v3",
+		"cloudflare-ai":  "https://api.cloudflare.com/client/v4/accounts/{accountId}/ai/v1",
 		"glm-cn":         "https://open.bigmodel.cn/api/paas/v4",
 		"nebius":         "https://api.studio.nebius.ai/v1",
 		"opencode":       "https://api.opencode.ai/v1",

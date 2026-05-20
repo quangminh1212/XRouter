@@ -74,6 +74,40 @@ func TestResolveEndpointCustomProviderRequiresBaseURL(t *testing.T) {
 	}
 }
 
+func TestResolveEndpointCloudflareAIUsesAccountID(t *testing.T) {
+	got, mode, err := resolveEndpoint(store.ProviderConnection{
+		Provider: "cloudflare-ai",
+		ProviderSpecificData: map[string]interface{}{
+			"accountId": "acc-123",
+		},
+	}, "cloudflare-ai/test-model", "/v1/chat/completions")
+	if err != nil {
+		t.Fatalf("cloudflare-ai endpoint failed: %v", err)
+	}
+	want := "https://api.cloudflare.com/client/v4/accounts/acc-123/ai/v1/chat/completions"
+	if got != want || mode != "openai" {
+		t.Fatalf("expected %s/openai, got %s/%s", want, got, mode)
+	}
+}
+
+func TestResolveEndpointAzureUsesDeployment(t *testing.T) {
+	got, mode, err := resolveEndpoint(store.ProviderConnection{
+		Provider: "azure",
+		ProviderSpecificData: map[string]interface{}{
+			"azureEndpoint":   "https://example.openai.azure.com",
+			"deployment":      "gpt-4o-mini",
+			"azureApiVersion": "2024-10-21",
+		},
+	}, "azure/gpt-4o-mini", "/v1/chat/completions")
+	if err != nil {
+		t.Fatalf("azure endpoint failed: %v", err)
+	}
+	want := "https://example.openai.azure.com/openai/deployments/gpt-4o-mini/chat/completions?api-version=2024-10-21"
+	if got != want || mode != "openai" {
+		t.Fatalf("expected %s/openai, got %s/%s", want, got, mode)
+	}
+}
+
 func TestNormalizeModelForWave1Provider(t *testing.T) {
 	body := map[string]interface{}{"model": "deepseek/deepseek-chat"}
 	raw := normalizeModelForUpstream(body, "deepseek")
