@@ -3,9 +3,11 @@ package app
 import (
 	"bytes"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 
 	"xrouter/internal/store"
@@ -248,6 +250,117 @@ func TestGenericCompatibleProviderAdapters(t *testing.T) {
 				t.Fatalf("create connection: %v", err)
 			}
 			req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", bytes.NewBufferString(`{"model":"`+tt.model+`","messages":[{"role":"user","content":"hello"}]}`))
+			req.Header.Set("Content-Type", "application/json")
+			rec := httptest.NewRecorder()
+			srv.ServeHTTP(rec, req)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
+			}
+		})
+	}
+}
+
+func TestProviderEndpointRegressionMatrix(t *testing.T) {
+	tests := []struct {
+		name         string
+		provider     string
+		apiType      string
+		path         string
+		model        string
+		requestBody  string
+		wantPath     string
+		wantContains string
+		responseBody string
+		contentType  string
+	}{
+		{
+			name:         "openai chat completions",
+			provider:     "openai",
+			apiType:      "openai",
+			path:         "/v1/chat/completions",
+			model:        "openai/gpt-4o-mini",
+			requestBody:  `{"model":"openai/gpt-4o-mini","messages":[{"role":"user","content":"hello"}]}`,
+			wantPath:     "/v1/chat/completions",
+			wantContains: `"model":"gpt-4o-mini"`,
+			responseBody: `{"id":"chatcmpl_1","choices":[{"message":{"role":"assistant","content":"ok"}}]}`,
+			contentType:  "application/json",
+		},
+		{
+			name:         "openai completions",
+			provider:     "openai",
+			apiType:      "openai",
+			path:         "/v1/completions",
+			model:        "openai/gpt-4o-mini",
+			requestBody:  `{"model":"openai/gpt-4o-mini","prompt":"hello","max_tokens":8}`,
+			wantPath:     "/v1/completions",
+			wantContains: `"model":"gpt-4o-mini"`,
+			responseBody: `{"id":"cmpl_1","choices":[{"text":"ok"}]}`,
+			contentType:  "application/json",
+		},
+		{
+			name:         "openai responses",
+			provider:     "openai",
+			apiType:      "responses",
+			path:         "/v1/responses",
+			model:        "openai/gpt-4o-mini",
+			requestBody:  `{"model":"openai/gpt-4o-mini","input":"hello"}`,
+			wantPath:     "/responses",
+			wantContains: `"model":"gpt-4o-mini"`,
+			responseBody: `{"id":"resp_1","object":"response"}`,
+			contentType:  "application/json",
+		},
+		{
+			name:         "anthropic messages adapter",
+			provider:     "anthropic-compatible",
+			apiType:      "anthropic",
+			path:         "/v1/chat/completions",
+			model:        "anthropic-compatible/claude-test",
+			requestBody:  `{"model":"anthropic-compatible/claude-test","messages":[{"role":"user","content":"hello"}]}`,
+			wantPath:     "/v1/messages",
+			wantContains: `"model":"claude-test"`,
+			responseBody: `{"id":"msg_1","content":[{"type":"text","text":"ok"}]}`,
+			contentType:  "application/json",
+		},
+		{
+			name:         "gemini compatible chat adapter",
+			provider:     "gemini-compatible",
+			apiType:      "gemini",
+			path:         "/v1/chat/completions",
+			model:        "gemini-compatible/gemini-test",
+			requestBody:  `{"model":"gemini-compatible/gemini-test","messages":[{"role":"user","content":"hello"}]}`,
+			wantPath:     "/v1beta/models/gemini-test:generateContent",
+			wantContains: `"contents":[{"parts":[{"text":"hello"}],"role":"user"}]`,
+			responseBody: `{"candidates":[{"content":{"role":"model","parts":[{"text":"ok"}]},"finishReason":"STOP"}]}`,
+			contentType:  "application/json",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			srv := newTestServer(t)
+			_, _ = srv.store.UpdateSettings(map[string]interface{}{"requireApiKey": false})
+			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != tt.wantPath {
+					t.Fatalf("unexpected upstream path: %s", r.URL.Path)
+				}
+				raw, err := io.ReadAll(r.Body)
+				if err != nil {
+					t.Fatalf("read body: %v", err)
+				}
+				if tt.wantContains != "" && !strings.Contains(string(raw), tt.wantContains) {
+					t.Fatalf("unexpected upstream body: %s", string(raw))
+				}
+				w.Header().Set("Content-Type", tt.contentType)
+				_, _ = w.Write([]byte(tt.responseBody))
+			}))
+			defer upstream.Close()
+			_, err := srv.store.CreateProviderConnection(store.ProviderConnection{
+				Provider: tt.provider, Name: tt.name, AuthType: "apikey", APIKey: "x", IsActive: true,
+				ProviderSpecificData: map[string]interface{}{"baseUrl": upstream.URL, "apiType": tt.apiType},
+			})
+			if err != nil {
+				t.Fatalf("create connection: %v", err)
+			}
+			req := httptest.NewRequest(http.MethodPost, tt.path, bytes.NewBufferString(tt.requestBody))
 			req.Header.Set("Content-Type", "application/json")
 			rec := httptest.NewRecorder()
 			srv.ServeHTTP(rec, req)
