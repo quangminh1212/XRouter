@@ -291,6 +291,22 @@ func (s *Server) handleMonitoringHealth(w http.ResponseWriter, r *http.Request) 
 		payload["success"] = true
 		payload["clearedCooldowns"] = cleared
 		writeJSON(w, http.StatusOK, payload)
+	case http.MethodDelete:
+		connectionID := strings.TrimSpace(r.URL.Query().Get("connectionId"))
+		provider := strings.TrimSpace(r.URL.Query().Get("provider"))
+		if connectionID == "" && provider == "" {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "connectionId or provider is required"})
+			return
+		}
+		cleared, err := s.store.ClearHealthState(connectionID, provider)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			return
+		}
+		payload := s.monitoringHealthPayload()
+		payload["success"] = true
+		payload["clearedCooldowns"] = cleared
+		writeJSON(w, http.StatusOK, payload)
 	default:
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
 	}
@@ -353,8 +369,26 @@ func (s *Server) monitoringHealthPayload() map[string]interface{} {
 				"backoffLevel":     conn.BackoffLevel,
 				"errorCode":        conn.ErrorCode,
 				"lastError":        conn.LastError,
+				"circuitOpenUntil": conn.CircuitOpenUntil,
 			})
 			continue
+		}
+		if conn.CircuitOpenUntil != "" {
+			if until, err := time.Parse(time.RFC3339, conn.CircuitOpenUntil); err == nil && until.After(now) {
+				totals["unavailable"]++
+				provider["unavailable"] = provider["unavailable"].(int) + 1
+				cooldowns = append(cooldowns, map[string]interface{}{
+					"id":               conn.ID,
+					"provider":         conn.Provider,
+					"name":             conn.Name,
+					"rateLimitedUntil": conn.RateLimitedUntil,
+					"backoffLevel":     conn.BackoffLevel,
+					"errorCode":        conn.ErrorCode,
+					"lastError":        conn.LastError,
+					"circuitOpenUntil": conn.CircuitOpenUntil,
+				})
+				continue
+			}
 		}
 		if conn.TestStatus == "unavailable" {
 			totals["unavailable"]++

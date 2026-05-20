@@ -7,16 +7,20 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"xrouter/internal/store"
 )
 
 type Forwarder struct {
-	client *http.Client
-	store  *store.Store
+	client          *http.Client
+	store           *store.Store
+	mu              sync.Mutex
+	proxyConfigHash string
 }
 
 func NewForwarder(st *store.Store) *Forwarder {
@@ -30,6 +34,33 @@ func NewForwarder(st *store.Store) *Forwarder {
 		client: &http.Client{Transport: transport, Timeout: 0},
 		store:  st,
 	}
+}
+
+func (f *Forwarder) refreshTransport() error {
+	settings := f.store.GetSettings()
+	hash := fmt.Sprintf("%t|%s|%s", settings.OutboundProxyEnabled, settings.OutboundProxyURL, settings.OutboundNoProxy)
+
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if hash == f.proxyConfigHash {
+		return nil
+	}
+
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.MaxIdleConns = 256
+	transport.MaxIdleConnsPerHost = 64
+	transport.MaxConnsPerHost = 128
+	transport.IdleConnTimeout = 90 * time.Second
+	if settings.OutboundProxyEnabled && strings.TrimSpace(settings.OutboundProxyURL) != "" {
+		proxyURL, err := url.Parse(strings.TrimSpace(settings.OutboundProxyURL))
+		if err != nil {
+			return fmt.Errorf("invalid outbound proxy url: %w", err)
+		}
+		transport.Proxy = http.ProxyURL(proxyURL)
+	}
+	f.client.Transport = transport
+	f.proxyConfigHash = hash
+	return nil
 }
 
 func resolveEndpoint(c store.ProviderConnection, model, path string) (string, string, error) {
@@ -156,7 +187,22 @@ func getFallbackCooldown(status int) time.Duration {
 	}
 }
 
+func getCircuitOpenDuration(failures int) time.Duration {
+	switch {
+	case failures >= 6:
+		return 90 * time.Second
+	case failures >= 4:
+		return 45 * time.Second
+	default:
+		return 20 * time.Second
+	}
+}
+
 func (f *Forwarder) Forward(ctx context.Context, path string, requestBody []byte) (*http.Response, error) {
+	if err := f.refreshTransport(); err != nil {
+		return nil, err
+	}
+
 	var body map[string]interface{}
 	if err := json.Unmarshal(requestBody, &body); err != nil {
 		return nil, fmt.Errorf("invalid json: %w", err)
@@ -203,7 +249,7 @@ func (f *Forwarder) Forward(ctx context.Context, path string, requestBody []byte
 		resp, err := f.client.Do(req)
 		if err != nil {
 			lastErr = err
-			_ = f.store.MarkConnectionCooldown(c.ID, time.Now().Add(5*time.Second), 0, err.Error())
+			_ = f.store.MarkConnectionCooldown(c.ID, time.Now().Add(getCircuitOpenDuration(c.ConsecutiveFailures+1)), 0, err.Error())
 			continue
 		}
 		if resp.StatusCode == 429 || resp.StatusCode >= 500 {
@@ -218,7 +264,7 @@ func (f *Forwarder) Forward(ctx context.Context, path string, requestBody []byte
 			_ = f.store.MarkConnectionCooldown(c.ID, until, resp.StatusCode, lastErr.Error())
 			continue
 		}
-		if c.RateLimitedUntil != "" || c.TestStatus == "unavailable" || c.BackoffLevel > 0 {
+		if c.RateLimitedUntil != "" || c.CircuitOpenUntil != "" || c.TestStatus == "unavailable" || c.BackoffLevel > 0 || c.ConsecutiveFailures > 0 {
 			_ = f.store.ClearConnectionCooldown(c.ID)
 		}
 		return resp, nil

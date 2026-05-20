@@ -30,6 +30,8 @@ type ProviderConnection struct {
 	ProviderSpecificData map[string]interface{} `json:"providerSpecificData,omitempty"`
 	RateLimitedUntil     string                 `json:"rateLimitedUntil,omitempty"`
 	BackoffLevel         int                    `json:"backoffLevel,omitempty"`
+	ConsecutiveFailures  int                    `json:"consecutiveFailures,omitempty"`
+	CircuitOpenUntil     string                 `json:"circuitOpenUntil,omitempty"`
 	LastError            string                 `json:"lastError,omitempty"`
 	ErrorCode            int                    `json:"errorCode,omitempty"`
 	TestStatus           string                 `json:"testStatus,omitempty"`
@@ -264,6 +266,12 @@ func (s *Store) GetActiveConnections(provider string) []ProviderConnection {
 				continue
 			}
 		}
+		if c.CircuitOpenUntil != "" {
+			until, err := time.Parse(time.RFC3339, c.CircuitOpenUntil)
+			if err == nil && until.After(time.Now()) {
+				continue
+			}
+		}
 		out = append(out, c)
 	}
 	sortConnections(out)
@@ -279,9 +287,14 @@ func (s *Store) MarkConnectionCooldown(id string, until time.Time, status int, m
 		}
 		s.db.ProviderConnections[i].RateLimitedUntil = until.UTC().Format(time.RFC3339)
 		s.db.ProviderConnections[i].BackoffLevel++
+		s.db.ProviderConnections[i].ConsecutiveFailures++
 		s.db.ProviderConnections[i].LastError = message
 		s.db.ProviderConnections[i].ErrorCode = status
 		s.db.ProviderConnections[i].TestStatus = "unavailable"
+		if shouldOpenCircuit(status, s.db.ProviderConnections[i].ConsecutiveFailures) {
+			s.db.ProviderConnections[i].CircuitOpenUntil = until.UTC().Add(getCircuitBreakDuration(s.db.ProviderConnections[i].ConsecutiveFailures)).Format(time.RFC3339)
+			s.db.ProviderConnections[i].TestStatus = "circuit-open"
+		}
 		s.db.ProviderConnections[i].UpdatedAt = time.Now().UTC().Format(time.RFC3339)
 		return s.persistLocked()
 	}
@@ -297,6 +310,8 @@ func (s *Store) ClearConnectionCooldown(id string) error {
 		}
 		s.db.ProviderConnections[i].RateLimitedUntil = ""
 		s.db.ProviderConnections[i].BackoffLevel = 0
+		s.db.ProviderConnections[i].ConsecutiveFailures = 0
+		s.db.ProviderConnections[i].CircuitOpenUntil = ""
 		s.db.ProviderConnections[i].LastError = ""
 		s.db.ProviderConnections[i].ErrorCode = 0
 		s.db.ProviderConnections[i].TestStatus = "active"
@@ -335,11 +350,62 @@ func (s *Store) ClearAllCooldowns() (int, error) {
 	cleared := 0
 	for i := range s.db.ProviderConnections {
 		conn := &s.db.ProviderConnections[i]
-		if conn.RateLimitedUntil == "" && conn.BackoffLevel == 0 && conn.LastError == "" && conn.ErrorCode == 0 && conn.TestStatus == "" {
+		if conn.RateLimitedUntil == "" && conn.BackoffLevel == 0 && conn.ConsecutiveFailures == 0 && conn.CircuitOpenUntil == "" && conn.LastError == "" && conn.ErrorCode == 0 && conn.TestStatus == "" {
 			continue
 		}
 		conn.RateLimitedUntil = ""
 		conn.BackoffLevel = 0
+		conn.ConsecutiveFailures = 0
+		conn.CircuitOpenUntil = ""
+		conn.LastError = ""
+		conn.ErrorCode = 0
+		conn.TestStatus = "active"
+		conn.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+		cleared++
+	}
+	if cleared == 0 {
+		return 0, nil
+	}
+	return cleared, s.persistLocked()
+}
+
+func shouldOpenCircuit(status, failures int) bool {
+	if failures < 3 {
+		return false
+	}
+	return status == 0 || status >= 500
+}
+
+func getCircuitBreakDuration(failures int) time.Duration {
+	switch {
+	case failures >= 6:
+		return 90 * time.Second
+	case failures >= 4:
+		return 45 * time.Second
+	default:
+		return 20 * time.Second
+	}
+}
+
+func (s *Store) ClearHealthState(connectionID, provider string) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	cleared := 0
+	for i := range s.db.ProviderConnections {
+		conn := &s.db.ProviderConnections[i]
+		if connectionID != "" && conn.ID != connectionID {
+			continue
+		}
+		if provider != "" && conn.Provider != provider {
+			continue
+		}
+		if conn.RateLimitedUntil == "" && conn.BackoffLevel == 0 && conn.ConsecutiveFailures == 0 && conn.CircuitOpenUntil == "" && conn.LastError == "" && conn.ErrorCode == 0 && conn.TestStatus == "" {
+			continue
+		}
+		conn.RateLimitedUntil = ""
+		conn.BackoffLevel = 0
+		conn.ConsecutiveFailures = 0
+		conn.CircuitOpenUntil = ""
 		conn.LastError = ""
 		conn.ErrorCode = 0
 		conn.TestStatus = "active"
