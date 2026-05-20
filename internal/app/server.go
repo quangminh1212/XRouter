@@ -90,6 +90,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/management/model-mappings", s.handleManagementModelMappings)
 	s.mux.HandleFunc("/api/management/model-aliases", s.handleManagementModelAliases)
 	s.mux.HandleFunc("/api/management/disabled-models", s.handleManagementDisabledModels)
+	s.mux.HandleFunc("/api/management/model-availability", s.handleManagementModelAvailability)
 	s.mux.HandleFunc("/api/quota", s.handleQuota)
 	s.mux.HandleFunc("/api/usage/summary", s.handleQuota)
 	s.mux.HandleFunc("/api/usage/stats", s.handleUsageStats)
@@ -921,12 +922,13 @@ func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
 	}
 	aliases := s.store.GetModelAliases()
 	disabled := toStringSet(s.store.GetDisabledModels())
+	availability := s.store.GetModelAvailability()
 	modelMap := map[string]map[string]string{}
 	for model, alias := range aliases {
 		if disabled[model] {
 			continue
 		}
-		modelMap[model] = map[string]string{"fullModel": model, "alias": alias}
+		modelMap[model] = map[string]string{"fullModel": model, "alias": alias, "availability": availabilityOrDefault(availability[model])}
 	}
 	for _, model := range store.GetFallbackModels() {
 		fullModel := strings.TrimSpace(model["fullModel"])
@@ -934,7 +936,7 @@ func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		if _, ok := modelMap[fullModel]; !ok {
-			modelMap[fullModel] = map[string]string{"fullModel": fullModel, "alias": model["alias"]}
+			modelMap[fullModel] = map[string]string{"fullModel": fullModel, "alias": model["alias"], "availability": availabilityOrDefault(availability[fullModel])}
 		}
 	}
 	models := make([]map[string]string, 0, len(modelMap))
@@ -945,6 +947,14 @@ func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
 		return strings.Compare(a["fullModel"], b["fullModel"])
 	})
 	writeJSON(w, http.StatusOK, map[string]interface{}{"models": models})
+}
+
+func availabilityOrDefault(status string) string {
+	status = strings.TrimSpace(status)
+	if status == "" {
+		return "unknown"
+	}
+	return status
 }
 
 func toStringSet(items []string) map[string]bool {
@@ -1145,6 +1155,62 @@ func (s *Server) handleManagementDisabledModels(w http.ResponseWriter, r *http.R
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]interface{}{"success": true, "models": models})
+	default:
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+	}
+}
+
+func (s *Server) handleManagementModelAvailability(w http.ResponseWriter, r *http.Request) {
+	if !isLocalOnlyRequest(r) {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "management api is restricted to localhost"})
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		writeJSON(w, http.StatusOK, map[string]interface{}{"availability": s.store.GetModelAvailability()})
+	case http.MethodPut:
+		var body struct {
+			Availability map[string]string `json:"availability"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+			return
+		}
+		availability, err := s.store.ReplaceModelAvailability(body.Availability)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{"success": true, "availability": availability})
+	case http.MethodPatch:
+		var body struct {
+			Availability map[string]string `json:"availability"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+			return
+		}
+		availability, err := s.store.PatchModelAvailability(body.Availability)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{"success": true, "availability": availability})
+	case http.MethodDelete:
+		var body struct {
+			Models []string `json:"models"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil && err != io.EOF {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+			return
+		}
+		availability, err := s.store.DeleteModelAvailabilityKeys(body.Models)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{"success": true, "availability": availability})
 	default:
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
 	}

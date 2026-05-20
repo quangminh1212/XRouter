@@ -140,6 +140,7 @@ type Settings struct {
 	ObservabilityMaxRecords    int               `json:"observabilityMaxRecords"`
 	ForcedModelMappings        map[string]string `json:"forcedModelMappings,omitempty"`
 	DisabledModels             []string          `json:"disabledModels,omitempty"`
+	ModelAvailability          map[string]string `json:"modelAvailability,omitempty"`
 	DefaultRequestsPerMinute   int               `json:"defaultRequestsPerMinute,omitempty"`
 }
 
@@ -224,6 +225,9 @@ func (s *Store) load() error {
 	if db.Settings.DisabledModels == nil {
 		db.Settings.DisabledModels = []string{}
 	}
+	if db.Settings.ModelAvailability == nil {
+		db.Settings.ModelAvailability = map[string]string{}
+	}
 	if db.RequestLogs == nil {
 		db.RequestLogs = []RequestLog{}
 	}
@@ -246,6 +250,7 @@ func defaultDB() DB {
 			ObservabilityMaxRecords:    1000,
 			ForcedModelMappings:        map[string]string{},
 			DisabledModels:             []string{},
+			ModelAvailability:          map[string]string{},
 		},
 		ModelAliases: map[string]string{},
 		Pricing:      map[string]interface{}{},
@@ -1012,6 +1017,87 @@ func (s *Store) IsModelDisabled(model string) bool {
 		}
 	}
 	return false
+}
+
+func sanitizeAvailability(input map[string]string) map[string]string {
+	out := map[string]string{}
+	for model, status := range input {
+		k := strings.TrimSpace(model)
+		v := strings.ToLower(strings.TrimSpace(status))
+		if k == "" {
+			continue
+		}
+		switch v {
+		case "available", "unavailable", "unknown":
+			out[k] = v
+		}
+	}
+	return out
+}
+
+func (s *Store) GetModelAvailability() map[string]string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make(map[string]string, len(s.db.Settings.ModelAvailability))
+	for k, v := range s.db.Settings.ModelAvailability {
+		out[k] = v
+	}
+	return sanitizeAvailability(out)
+}
+
+func (s *Store) ReplaceModelAvailability(input map[string]string) (map[string]string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.db.Settings.ModelAvailability = sanitizeAvailability(input)
+	if err := s.persistLocked(); err != nil {
+		return nil, err
+	}
+	out := make(map[string]string, len(s.db.Settings.ModelAvailability))
+	for k, v := range s.db.Settings.ModelAvailability {
+		out[k] = v
+	}
+	return out, nil
+}
+
+func (s *Store) PatchModelAvailability(input map[string]string) (map[string]string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.db.Settings.ModelAvailability == nil {
+		s.db.Settings.ModelAvailability = map[string]string{}
+	}
+	for k, v := range sanitizeAvailability(input) {
+		s.db.Settings.ModelAvailability[k] = v
+	}
+	if err := s.persistLocked(); err != nil {
+		return nil, err
+	}
+	out := make(map[string]string, len(s.db.Settings.ModelAvailability))
+	for k, v := range s.db.Settings.ModelAvailability {
+		out[k] = v
+	}
+	return out, nil
+}
+
+func (s *Store) DeleteModelAvailabilityKeys(models []string) (map[string]string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.db.Settings.ModelAvailability == nil {
+		s.db.Settings.ModelAvailability = map[string]string{}
+	}
+	for _, model := range models {
+		model = strings.TrimSpace(model)
+		if model != "" {
+			delete(s.db.Settings.ModelAvailability, model)
+		}
+	}
+	if err := s.persistLocked(); err != nil {
+		return nil, err
+	}
+	out := make(map[string]string, len(s.db.Settings.ModelAvailability))
+	for k, v := range s.db.Settings.ModelAvailability {
+		out[k] = v
+	}
+	return out, nil
 }
 
 func (s *Store) GetUsageSummary() map[string]interface{} {
