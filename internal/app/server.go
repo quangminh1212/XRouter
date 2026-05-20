@@ -52,6 +52,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/quota", s.handleQuota)
 	s.mux.HandleFunc("/api/usage/summary", s.handleQuota)
 	s.mux.HandleFunc("/api/debug/db", s.handleDebugDB)
+	s.mux.HandleFunc("/api/monitoring/health", s.handleMonitoringHealth)
 	s.mux.HandleFunc("/v1/chat/completions", s.handleProxy)
 	s.mux.HandleFunc("/v1/messages", s.handleProxy)
 	s.mux.HandleFunc("/v1/responses", s.handleProxy)
@@ -268,6 +269,125 @@ func (s *Server) handleManagementModelMappings(w http.ResponseWriter, r *http.Re
 		writeJSON(w, http.StatusOK, map[string]interface{}{"success": true, "mappings": mappings})
 	default:
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+	}
+}
+
+func (s *Server) handleMonitoringHealth(w http.ResponseWriter, r *http.Request) {
+	if !isLocalOnlyRequest(r) {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "monitoring api is restricted to localhost"})
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		writeJSON(w, http.StatusOK, s.monitoringHealthPayload())
+	case http.MethodPost:
+		cleared, err := s.store.ClearAllCooldowns()
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			return
+		}
+		payload := s.monitoringHealthPayload()
+		payload["success"] = true
+		payload["clearedCooldowns"] = cleared
+		writeJSON(w, http.StatusOK, payload)
+	default:
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+	}
+}
+
+func (s *Server) monitoringHealthPayload() map[string]interface{} {
+	now := time.Now().UTC()
+	connections := s.store.GetAllConnectionsRaw()
+	providers := map[string]map[string]interface{}{}
+	cooldowns := make([]map[string]interface{}, 0)
+	totals := map[string]int{
+		"connections":  len(connections),
+		"active":       0,
+		"inactive":     0,
+		"cooldown":     0,
+		"unavailable":  0,
+		"providerKeys": 0,
+	}
+
+	for _, conn := range connections {
+		providerName := strings.TrimSpace(conn.Provider)
+		if providerName == "" {
+			providerName = "unknown"
+		}
+		provider := providers[providerName]
+		if provider == nil {
+			provider = map[string]interface{}{
+				"provider":    providerName,
+				"connections": 0,
+				"active":      0,
+				"inactive":    0,
+				"cooldown":    0,
+				"unavailable": 0,
+			}
+			providers[providerName] = provider
+			totals["providerKeys"]++
+		}
+
+		provider["connections"] = provider["connections"].(int) + 1
+		if !conn.IsActive {
+			totals["inactive"]++
+			provider["inactive"] = provider["inactive"].(int) + 1
+			continue
+		}
+
+		inCooldown := false
+		if conn.RateLimitedUntil != "" {
+			if until, err := time.Parse(time.RFC3339, conn.RateLimitedUntil); err == nil && until.After(now) {
+				inCooldown = true
+			}
+		}
+		if inCooldown {
+			totals["cooldown"]++
+			provider["cooldown"] = provider["cooldown"].(int) + 1
+			cooldowns = append(cooldowns, map[string]interface{}{
+				"id":               conn.ID,
+				"provider":         conn.Provider,
+				"name":             conn.Name,
+				"rateLimitedUntil": conn.RateLimitedUntil,
+				"backoffLevel":     conn.BackoffLevel,
+				"errorCode":        conn.ErrorCode,
+				"lastError":        conn.LastError,
+			})
+			continue
+		}
+		if conn.TestStatus == "unavailable" {
+			totals["unavailable"]++
+			provider["unavailable"] = provider["unavailable"].(int) + 1
+			continue
+		}
+		totals["active"]++
+		provider["active"] = provider["active"].(int) + 1
+	}
+
+	status := "healthy"
+	if totals["active"] == 0 && totals["connections"] > 0 {
+		status = "unavailable"
+	} else if totals["cooldown"] > 0 || totals["unavailable"] > 0 || totals["inactive"] > 0 {
+		status = "degraded"
+	}
+
+	var mem runtime.MemStats
+	runtime.ReadMemStats(&mem)
+	return map[string]interface{}{
+		"name":        "xrouter",
+		"status":      status,
+		"generatedAt": now.Format(time.RFC3339),
+		"uptimeSec":   int(time.Since(s.startedAt).Seconds()),
+		"totals":      totals,
+		"providers":   providers,
+		"cooldowns":   cooldowns,
+		"runtime": map[string]interface{}{
+			"goVersion":  runtime.Version(),
+			"goroutines": runtime.NumGoroutine(),
+			"heapAlloc":  mem.HeapAlloc,
+			"heapInuse":  mem.HeapInuse,
+		},
 	}
 }
 

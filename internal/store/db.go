@@ -320,6 +320,38 @@ func (s *Store) GetAllConnections() []ProviderConnection {
 	return out
 }
 
+func (s *Store) GetAllConnectionsRaw() []ProviderConnection {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]ProviderConnection, len(s.db.ProviderConnections))
+	copy(out, s.db.ProviderConnections)
+	sortConnections(out)
+	return out
+}
+
+func (s *Store) ClearAllCooldowns() (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	cleared := 0
+	for i := range s.db.ProviderConnections {
+		conn := &s.db.ProviderConnections[i]
+		if conn.RateLimitedUntil == "" && conn.BackoffLevel == 0 && conn.LastError == "" && conn.ErrorCode == 0 && conn.TestStatus == "" {
+			continue
+		}
+		conn.RateLimitedUntil = ""
+		conn.BackoffLevel = 0
+		conn.LastError = ""
+		conn.ErrorCode = 0
+		conn.TestStatus = "active"
+		conn.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+		cleared++
+	}
+	if cleared == 0 {
+		return 0, nil
+	}
+	return cleared, s.persistLocked()
+}
+
 func randID(prefix string) string {
 	buf := make([]byte, 8)
 	_, _ = rand.Read(buf)
