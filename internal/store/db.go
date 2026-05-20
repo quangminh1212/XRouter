@@ -16,6 +16,29 @@ import (
 	"time"
 )
 
+type ProviderCatalogEntry struct {
+	Provider       string   `json:"provider"`
+	APIType        string   `json:"apiType"`
+	BaseURL        string   `json:"baseUrl"`
+	FallbackModels []string `json:"fallbackModels,omitempty"`
+}
+
+var providerCatalog = map[string]ProviderCatalogEntry{
+	"openai":            {Provider: "openai", APIType: "openai", BaseURL: "https://api.openai.com"},
+	"anthropic":         {Provider: "anthropic", APIType: "anthropic", BaseURL: "https://api.anthropic.com"},
+	"openrouter":        {Provider: "openrouter", APIType: "openai", BaseURL: "https://openrouter.ai/api"},
+	"deepseek":          {Provider: "deepseek", APIType: "openai", BaseURL: "https://api.deepseek.com", FallbackModels: []string{"deepseek/deepseek-chat"}},
+	"groq":              {Provider: "groq", APIType: "openai", BaseURL: "https://api.groq.com/openai", FallbackModels: []string{"groq/llama-3.1-70b-versatile"}},
+	"mistral":           {Provider: "mistral", APIType: "openai", BaseURL: "https://api.mistral.ai", FallbackModels: []string{"mistral/mistral-large-latest"}},
+	"cerebras":          {Provider: "cerebras", APIType: "openai", BaseURL: "https://api.cerebras.ai", FallbackModels: []string{"cerebras/llama3.1-70b"}},
+	"fireworks":         {Provider: "fireworks", APIType: "openai", BaseURL: "https://api.fireworks.ai/inference/v1", FallbackModels: []string{"fireworks/accounts/fireworks/models/llama-v3p1-70b-instruct"}},
+	"together":          {Provider: "together", APIType: "openai", BaseURL: "https://api.together.xyz/v1", FallbackModels: []string{"together/meta-llama/Llama-3.1-70B-Instruct-Turbo"}},
+	"siliconflow":       {Provider: "siliconflow", APIType: "openai", BaseURL: "https://api.siliconflow.cn/v1", FallbackModels: []string{"siliconflow/Qwen/Qwen2.5-Coder-32B-Instruct"}},
+	"vercel-ai-gateway": {Provider: "vercel-ai-gateway", APIType: "openai", BaseURL: "https://ai-gateway.vercel.sh/v1", FallbackModels: []string{"vercel-ai-gateway/openai/gpt-4o-mini"}},
+	"cohere":            {Provider: "cohere", APIType: "openai", BaseURL: "https://api.cohere.com/compatibility/v1", FallbackModels: []string{"cohere/command-r-plus"}},
+	"perplexity":        {Provider: "perplexity", APIType: "openai", BaseURL: "https://api.perplexity.ai", FallbackModels: []string{"perplexity/sonar-pro"}},
+}
+
 type ProviderConnection struct {
 	ID                   string                 `json:"id"`
 	Provider             string                 `json:"provider"`
@@ -183,6 +206,47 @@ func defaultDB() DB {
 		Pricing:      map[string]interface{}{},
 		UsageData:    UsageData{History: []UsageEntry{}, TotalRequestsLifetime: 0, DailySummary: map[string]DailySummary{}},
 	}
+}
+
+func GetProviderCatalogEntry(provider string) (ProviderCatalogEntry, bool) {
+	entry, ok := providerCatalog[strings.ToLower(strings.TrimSpace(provider))]
+	return entry, ok
+}
+
+func GetFallbackModels() []map[string]string {
+	out := make([]map[string]string, 0, 16)
+	for _, entry := range providerCatalog {
+		for _, model := range entry.FallbackModels {
+			out = append(out, map[string]string{"fullModel": model, "alias": ""})
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		return out[i]["fullModel"] < out[j]["fullModel"]
+	})
+	return out
+}
+
+func applyProviderDefaults(c ProviderConnection) ProviderConnection {
+	entry, ok := GetProviderCatalogEntry(c.Provider)
+	if !ok {
+		return c
+	}
+	if c.ProviderSpecificData == nil {
+		c.ProviderSpecificData = map[string]interface{}{}
+	}
+	if strings.TrimSpace(c.AuthType) == "" {
+		c.AuthType = "apikey"
+	}
+	if _, ok := c.ProviderSpecificData["baseUrl"]; !ok || strings.TrimSpace(fmt.Sprint(c.ProviderSpecificData["baseUrl"])) == "" {
+		c.ProviderSpecificData["baseUrl"] = entry.BaseURL
+	}
+	if _, ok := c.ProviderSpecificData["apiType"]; !ok || strings.TrimSpace(fmt.Sprint(c.ProviderSpecificData["apiType"])) == "" {
+		c.ProviderSpecificData["apiType"] = entry.APIType
+	}
+	if strings.TrimSpace(c.DefaultModel) == "" && len(entry.FallbackModels) > 0 {
+		c.DefaultModel = entry.FallbackModels[0]
+	}
+	return c
 }
 
 func mustJSON(v interface{}) (json.RawMessage, error) {
@@ -431,6 +495,7 @@ func (s *Store) CreateProviderConnection(c ProviderConnection) (ProviderConnecti
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	now := time.Now().UTC().Format(time.RFC3339)
+	c = applyProviderDefaults(c)
 	if c.ID == "" {
 		c.ID = randID("pc_")
 	}
@@ -468,6 +533,7 @@ func (s *Store) UpdateProviderConnection(id string, patch map[string]interface{}
 	if err := json.Unmarshal(nextRaw, &next); err != nil {
 		return ProviderConnection{}, err
 	}
+	next = applyProviderDefaults(next)
 	s.db.ProviderConnections[idx] = next
 	return next, s.persistLocked()
 }
