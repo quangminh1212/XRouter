@@ -458,6 +458,25 @@ func (s *Store) GetConnectionByIDRaw(id string) (ProviderConnection, bool) {
 	return ProviderConnection{}, false
 }
 
+func (s *Store) UpdateConnectionTestStatus(id, status, message string, code int) (ProviderConnection, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.db.ProviderConnections {
+		if s.db.ProviderConnections[i].ID != id {
+			continue
+		}
+		s.db.ProviderConnections[i].TestStatus = strings.TrimSpace(status)
+		s.db.ProviderConnections[i].LastError = strings.TrimSpace(message)
+		s.db.ProviderConnections[i].ErrorCode = code
+		s.db.ProviderConnections[i].UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+		if err := s.persistLocked(); err != nil {
+			return ProviderConnection{}, err
+		}
+		return s.db.ProviderConnections[i], nil
+	}
+	return ProviderConnection{}, fmt.Errorf("provider connection not found")
+}
+
 func (s *Store) ClearAllCooldowns() (int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

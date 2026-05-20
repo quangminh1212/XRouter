@@ -291,6 +291,14 @@ type MediaRequest struct {
 	Headers  http.Header
 }
 
+type ProbeResult struct {
+	Provider   string `json:"provider"`
+	Healthy    bool   `json:"healthy"`
+	StatusCode int    `json:"statusCode,omitempty"`
+	Message    string `json:"message,omitempty"`
+	LatencyMs  int64  `json:"latencyMs"`
+}
+
 type OAuthRefreshResult struct {
 	AccessToken  string `json:"accessToken"`
 	RefreshToken string `json:"refreshToken,omitempty"`
@@ -475,6 +483,110 @@ func normalizeResultArray(raw interface{}, titleKey, urlKey, snippetKey string) 
 		})
 	}
 	return results
+}
+
+func (f *Forwarder) ProbeConnection(ctx context.Context, c store.ProviderConnection) (ProbeResult, error) {
+	if err := f.refreshTransport(); err != nil {
+		return ProbeResult{}, err
+	}
+	entry, ok := store.GetProviderCatalogEntry(c.Provider)
+	if !ok {
+		return ProbeResult{}, fmt.Errorf("unknown provider %s", c.Provider)
+	}
+	baseURL := strings.TrimRight(entry.BaseURL, "/")
+	if c.ProviderSpecificData != nil {
+		if v, ok := c.ProviderSpecificData["baseUrl"].(string); ok && strings.TrimSpace(v) != "" {
+			baseURL = strings.TrimRight(strings.TrimSpace(v), "/")
+		}
+	}
+	targetURL, method, body := probeRequestForProvider(entry, baseURL, c.DefaultModel)
+	start := time.Now()
+	req, err := http.NewRequestWithContext(ctx, method, targetURL, bytes.NewReader(body))
+	if err != nil {
+		return ProbeResult{}, err
+	}
+	if len(body) > 0 {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	req.Header.Set("Accept", "application/json")
+	setAuthHeader(req, c, entry.APIType)
+	resp, err := f.client.Do(req)
+	latency := time.Since(start).Milliseconds()
+	if err != nil {
+		return ProbeResult{Provider: c.Provider, Healthy: false, Message: err.Error(), LatencyMs: latency}, err
+	}
+	defer resp.Body.Close()
+	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1*1024*1024))
+	healthy := resp.StatusCode >= 200 && resp.StatusCode < 300
+	msg := ""
+	if !healthy {
+		msg = fmt.Sprintf("status %d", resp.StatusCode)
+	}
+	result := ProbeResult{
+		Provider:   c.Provider,
+		Healthy:    healthy,
+		StatusCode: resp.StatusCode,
+		Message:    msg,
+		LatencyMs:  latency,
+	}
+	if !healthy {
+		return result, fmt.Errorf("provider probe failed: %s", msg)
+	}
+	return result, nil
+}
+
+func probeRequestForProvider(entry store.ProviderCatalogEntry, baseURL, defaultModel string) (url, method string, body []byte) {
+	switch entry.APIType {
+	case "search":
+		switch entry.Provider {
+		case "brave-search":
+			return baseURL + "/web/search?q=healthcheck&count=1", http.MethodGet, nil
+		case "serper":
+			raw, _ := json.Marshal(map[string]interface{}{"q": "healthcheck", "num": 1})
+			return baseURL + "/search", http.MethodPost, raw
+		default:
+			raw, _ := json.Marshal(map[string]interface{}{"query": "healthcheck", "max_results": 1})
+			return baseURL + "/search", http.MethodPost, raw
+		}
+	case "embedding":
+		model := strings.TrimSpace(defaultModel)
+		if model == "" {
+			model = "text-embedding-3-small"
+		}
+		raw, _ := json.Marshal(map[string]interface{}{"model": model, "input": "healthcheck"})
+		return joinOpenAIEndpoint(baseURL, "/v1/embeddings"), http.MethodPost, raw
+	case "tts":
+		model := strings.TrimSpace(defaultModel)
+		if model == "" {
+			model = "gpt-4o-mini-tts"
+		}
+		raw, _ := json.Marshal(map[string]interface{}{"model": model, "input": "ok", "voice": "alloy"})
+		return joinOpenAIEndpoint(baseURL, "/v1/audio/speech"), http.MethodPost, raw
+	case "stt":
+		return baseURL, http.MethodGet, nil
+	case "anthropic":
+		model := strings.TrimSpace(defaultModel)
+		if model == "" {
+			model = "claude-3-5-sonnet-latest"
+		}
+		raw, _ := json.Marshal(map[string]interface{}{
+			"model":      model,
+			"max_tokens": 8,
+			"messages":   []map[string]string{{"role": "user", "content": "hi"}},
+		})
+		return joinOpenAIEndpoint(baseURL, "/v1/messages"), http.MethodPost, raw
+	default:
+		model := strings.TrimSpace(defaultModel)
+		if model == "" {
+			model = "gpt-4o-mini"
+		}
+		raw, _ := json.Marshal(map[string]interface{}{
+			"model":      model,
+			"max_tokens": 8,
+			"messages":   []map[string]string{{"role": "user", "content": "hi"}},
+		})
+		return joinOpenAIEndpoint(baseURL, "/v1/chat/completions"), http.MethodPost, raw
+	}
 }
 
 func (f *Forwarder) RefreshOAuthToken(ctx context.Context, c store.ProviderConnection, tokenURL, clientID, clientSecret string) (OAuthRefreshResult, error) {
