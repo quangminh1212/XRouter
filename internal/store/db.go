@@ -77,6 +77,8 @@ type ProviderConnection struct {
 	ExcludedModels       []string               `json:"excludedModels,omitempty"`
 	ModelAliases         map[string]string      `json:"modelAliases,omitempty"`
 	ProviderSpecificData map[string]interface{} `json:"providerSpecificData,omitempty"`
+	AccountName          string                 `json:"accountName,omitempty"`
+	AccountEmail         string                 `json:"accountEmail,omitempty"`
 	RateLimitedUntil     string                 `json:"rateLimitedUntil,omitempty"`
 	BackoffLevel         int                    `json:"backoffLevel,omitempty"`
 	ConsecutiveFailures  int                    `json:"consecutiveFailures,omitempty"`
@@ -166,6 +168,7 @@ type RoutePolicy struct {
 	Name         string   `json:"name"`
 	ModelPrefix  string   `json:"modelPrefix,omitempty"`
 	Providers    []string `json:"providers,omitempty"`
+	Accounts     []string `json:"accounts,omitempty"`
 	TargetPoolID string   `json:"targetPoolId,omitempty"`
 	TargetNodeID string   `json:"targetNodeId,omitempty"`
 	ForceModel   string   `json:"forceModel,omitempty"`
@@ -424,6 +427,8 @@ func ListProviderCatalogEntries() []ProviderCatalogEntry {
 }
 
 func applyProviderDefaults(c ProviderConnection) ProviderConnection {
+	c.AccountName = strings.TrimSpace(c.AccountName)
+	c.AccountEmail = strings.TrimSpace(c.AccountEmail)
 	entry, ok := GetProviderCatalogEntry(c.Provider)
 	if !ok {
 		return c
@@ -1316,6 +1321,21 @@ func sanitizePolicyProviders(items []string) []string {
 	return out
 }
 
+func sanitizePolicyAccounts(items []string) []string {
+	seen := map[string]bool{}
+	out := make([]string, 0, len(items))
+	for _, item := range items {
+		item = strings.ToLower(strings.TrimSpace(item))
+		if item == "" || seen[item] {
+			continue
+		}
+		seen[item] = true
+		out = append(out, item)
+	}
+	sort.Strings(out)
+	return out
+}
+
 func (s *Store) ListRoutePolicies() []RoutePolicy {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -1333,6 +1353,7 @@ func (s *Store) CreateRoutePolicy(item RoutePolicy) (RoutePolicy, error) {
 	item.Name = strings.TrimSpace(item.Name)
 	item.ModelPrefix = strings.TrimSpace(item.ModelPrefix)
 	item.Providers = sanitizePolicyProviders(item.Providers)
+	item.Accounts = sanitizePolicyAccounts(item.Accounts)
 	item.TargetPoolID = strings.TrimSpace(item.TargetPoolID)
 	item.TargetNodeID = strings.TrimSpace(item.TargetNodeID)
 	item.ForceModel = strings.TrimSpace(item.ForceModel)
@@ -1370,6 +1391,7 @@ func (s *Store) UpdateRoutePolicy(id string, patch map[string]interface{}) (Rout
 	next.Name = strings.TrimSpace(next.Name)
 	next.ModelPrefix = strings.TrimSpace(next.ModelPrefix)
 	next.Providers = sanitizePolicyProviders(next.Providers)
+	next.Accounts = sanitizePolicyAccounts(next.Accounts)
 	next.TargetPoolID = strings.TrimSpace(next.TargetPoolID)
 	next.TargetNodeID = strings.TrimSpace(next.TargetNodeID)
 	next.ForceModel = strings.TrimSpace(next.ForceModel)

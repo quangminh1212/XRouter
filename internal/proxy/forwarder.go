@@ -223,7 +223,7 @@ func matchRoutePolicy(policy store.RoutePolicy, model string, providerHint strin
 	if strings.TrimSpace(policy.ModelPrefix) != "" && !strings.HasPrefix(model, strings.TrimSpace(policy.ModelPrefix)) {
 		return false
 	}
-	if len(policy.Providers) > 0 {
+	if providerHint != "" && len(policy.Providers) > 0 {
 		matched := false
 		for _, provider := range policy.Providers {
 			if provider == strings.ToLower(strings.TrimSpace(providerHint)) {
@@ -236,6 +236,35 @@ func matchRoutePolicy(policy store.RoutePolicy, model string, providerHint strin
 		}
 	}
 	return true
+}
+
+func filterCandidatesByPolicy(candidates []store.ProviderConnection, policy store.RoutePolicy) []store.ProviderConnection {
+	if len(policy.Providers) == 0 && len(policy.Accounts) == 0 {
+		return candidates
+	}
+	providers := map[string]bool{}
+	for _, item := range policy.Providers {
+		providers[strings.ToLower(strings.TrimSpace(item))] = true
+	}
+	accounts := map[string]bool{}
+	for _, item := range policy.Accounts {
+		accounts[strings.ToLower(strings.TrimSpace(item))] = true
+	}
+	out := make([]store.ProviderConnection, 0, len(candidates))
+	for _, candidate := range candidates {
+		if len(providers) > 0 && !providers[strings.ToLower(strings.TrimSpace(candidate.Provider))] {
+			continue
+		}
+		if len(accounts) > 0 {
+			accountName := strings.ToLower(strings.TrimSpace(candidate.AccountName))
+			accountEmail := strings.ToLower(strings.TrimSpace(candidate.AccountEmail))
+			if !accounts[accountName] && !accounts[accountEmail] {
+				continue
+			}
+		}
+		out = append(out, candidate)
+	}
+	return out
 }
 
 func normalizeModelForUpstream(body map[string]interface{}, providerHint string) []byte {
@@ -1251,10 +1280,14 @@ func (f *Forwarder) Forward(ctx context.Context, scope, path string, requestBody
 	nodeHint := extractNodeHint(body)
 	delete(body, "pool")
 	delete(body, "node")
+	var selectedPolicy store.RoutePolicy
+	hasSelectedPolicy := false
 	for _, policy := range f.store.ListRoutePolicies() {
 		if !matchRoutePolicy(policy, model, "") {
 			continue
 		}
+		selectedPolicy = policy
+		hasSelectedPolicy = true
 		if poolHint == "" && strings.TrimSpace(policy.TargetPoolID) != "" {
 			poolHint = strings.TrimSpace(policy.TargetPoolID)
 		}
@@ -1282,6 +1315,9 @@ func (f *Forwarder) Forward(ctx context.Context, scope, path string, requestBody
 	candidates := f.store.GetActiveConnections(providerHint)
 	if len(candidates) == 0 && providerHint != "" {
 		candidates = f.store.GetActiveConnections("")
+	}
+	if hasSelectedPolicy {
+		candidates = filterCandidatesByPolicy(candidates, selectedPolicy)
 	}
 	if strings.TrimSpace(poolHint) != "" {
 		if pool, ok := f.store.GetProxyPool(poolHint); ok {
@@ -1325,7 +1361,7 @@ func (f *Forwarder) Forward(ctx context.Context, scope, path string, requestBody
 	attempts := 0
 
 	upstreamBody := normalizeModelForUpstream(cloneRequestBody(body), providerHint)
-	if !isStreaming(body) && f.store.GetSettings().ComboStrategy == "fallback" && strings.TrimSpace(poolHint) == "" && strings.TrimSpace(nodeHint) == "" && !anyConnectionHasModelControls(candidates) {
+	if !isStreaming(body) && f.store.GetSettings().ComboStrategy == "fallback" && strings.TrimSpace(poolHint) == "" && strings.TrimSpace(nodeHint) == "" && !hasSelectedPolicy && !anyConnectionHasModelControls(candidates) {
 		if resp, err, handled := f.forwardDedup(ctx, scope, path, upstreamBody, model, providerHint); handled {
 			return resp, err
 		}
