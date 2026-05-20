@@ -56,7 +56,7 @@ Reference repos:
 - [x] Claude count tokens
 - [ ] Gemini-compatible `v1beta/models/*action`
 - [x] Responses compact variant
-- [ ] Responses websocket/stream alias
+- [x] Responses websocket/stream alias
 - [x] Codex direct alias routes such as `/backend-api/codex/responses`
 
 ### 2) Media and non-chat endpoints
