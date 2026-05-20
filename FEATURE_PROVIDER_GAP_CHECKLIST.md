@@ -85,7 +85,7 @@ Reference repos:
 - [x] Provider model test endpoint
 - [x] Provider models endpoint
 - [x] Provider credential validate endpoint
-- [ ] Usage request logs
+- [x] Usage request logs
 - [ ] Usage history endpoint
 - [ ] Usage chart/stats stream
 - [ ] Request detail endpoint
@@ -163,7 +163,7 @@ Reference repos:
 - [x] Add `POST /v1/search`
 - [x] Add provider validate/test/models endpoints
 - [x] Add `GET /api/providers/{id}/models`
-- [ ] Add detailed per-request usage logs
+- [x] Add detailed per-request usage logs
 
 ### P2 - next expansion
 
