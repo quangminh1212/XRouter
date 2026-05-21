@@ -74,7 +74,7 @@ func (s *Server) handleOAuthProviderImport(w http.ResponseWriter, r *http.Reques
 		DefaultModel         string                 `json:"defaultModel"`
 		ProviderSpecificData map[string]interface{} `json:"providerSpecificData"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1*1024*1024)).Decode(&body); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 		return
 	}
@@ -134,7 +134,7 @@ func (s *Server) handleOAuthProviderRefresh(w http.ResponseWriter, r *http.Reque
 		ClientID     string `json:"clientId"`
 		ClientSecret string `json:"clientSecret"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil && err != io.EOF {
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1*1024*1024)).Decode(&body); err != nil && err != io.EOF {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 		return
 	}
@@ -179,7 +179,7 @@ func (s *Server) handleVertexCredentialImport(w http.ResponseWriter, r *http.Req
 		ProjectID    string `json:"projectId"`
 		Location     string `json:"location"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1*1024*1024)).Decode(&body); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 		return
 	}

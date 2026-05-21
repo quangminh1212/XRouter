@@ -52,7 +52,7 @@ func (s *Server) handleOAuthProviderStart(w http.ResponseWriter, r *http.Request
 		TokenURL     string   `json:"tokenUrl"`
 		Scopes       []string `json:"scopes"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil && err != io.EOF {
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1*1024*1024)).Decode(&body); err != nil && err != io.EOF {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 		return
 	}
@@ -151,7 +151,7 @@ func (s *Server) handleOAuthProviderExchange(w http.ResponseWriter, r *http.Requ
 		Code  string `json:"code"`
 		Name  string `json:"name"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1*1024*1024)).Decode(&body); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 		return
 	}

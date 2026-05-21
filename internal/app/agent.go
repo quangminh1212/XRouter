@@ -3,6 +3,7 @@ package app
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -38,7 +39,7 @@ func (s *Server) handleCloudAgentTasks(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]interface{}{"tasks": tasks})
 	case http.MethodPost:
 		var body map[string]interface{}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		if err := json.NewDecoder(io.LimitReader(r.Body, 1*1024*1024)).Decode(&body); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 			return
 		}
@@ -73,7 +74,7 @@ func (s *Server) handleCloudAgentTaskByID(w http.ResponseWriter, r *http.Request
 		writeJSON(w, http.StatusOK, task)
 	case http.MethodPatch, http.MethodPut:
 		var patch map[string]interface{}
-		if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
+		if err := json.NewDecoder(io.LimitReader(r.Body, 1*1024*1024)).Decode(&patch); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 			return
 		}
@@ -114,7 +115,7 @@ func (s *Server) handleACPAgents(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]interface{}{"agents": s.store.ListA2AAgents(true)})
 	case http.MethodPost:
 		var body store.A2AAgent
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		if err := json.NewDecoder(io.LimitReader(r.Body, 1*1024*1024)).Decode(&body); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 			return
 		}
@@ -135,7 +136,7 @@ func (s *Server) handleACPAgents(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		var patch map[string]interface{}
-		if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
+		if err := json.NewDecoder(io.LimitReader(r.Body, 1*1024*1024)).Decode(&patch); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 			return
 		}
@@ -172,7 +173,7 @@ func (s *Server) handleA2ARPC(w http.ResponseWriter, r *http.Request) {
 		Method  string      `json:"method"`
 		Params  interface{} `json:"params"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1*1024*1024)).Decode(&body); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]interface{}{
 			"jsonrpc": "2.0",
 			"id":      nil,
@@ -289,7 +290,7 @@ func (s *Server) handleManagementMCPServers(w http.ResponseWriter, r *http.Reque
 		writeJSON(w, http.StatusOK, map[string]interface{}{"servers": s.store.ListMCPServers(true)})
 	case http.MethodPost:
 		var body store.MCPServer
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		if err := json.NewDecoder(io.LimitReader(r.Body, 1*1024*1024)).Decode(&body); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 			return
 		}
@@ -320,7 +321,7 @@ func (s *Server) handleManagementA2AAgents(w http.ResponseWriter, r *http.Reques
 		writeJSON(w, http.StatusOK, map[string]interface{}{"agents": s.store.ListA2AAgents(true)})
 	case http.MethodPost:
 		var body store.A2AAgent
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		if err := json.NewDecoder(io.LimitReader(r.Body, 1*1024*1024)).Decode(&body); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 			return
 		}
@@ -355,7 +356,7 @@ func (s *Server) handleManagementTunnels(w http.ResponseWriter, r *http.Request)
 		writeJSON(w, http.StatusOK, map[string]interface{}{"tunnels": s.store.ListTunnelEndpoints(true)})
 	case http.MethodPost:
 		var body store.TunnelEndpoint
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		if err := json.NewDecoder(io.LimitReader(r.Body, 1*1024*1024)).Decode(&body); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 			return
 		}
@@ -391,7 +392,7 @@ func (s *Server) handleManagementMCPServerByID(w http.ResponseWriter, r *http.Re
 	switch r.Method {
 	case http.MethodPatch:
 		var patch map[string]interface{}
-		if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
+		if err := json.NewDecoder(io.LimitReader(r.Body, 1*1024*1024)).Decode(&patch); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 			return
 		}
@@ -427,7 +428,7 @@ func (s *Server) handleManagementA2AAgentByID(w http.ResponseWriter, r *http.Req
 	switch r.Method {
 	case http.MethodPatch:
 		var patch map[string]interface{}
-		if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
+		if err := json.NewDecoder(io.LimitReader(r.Body, 1*1024*1024)).Decode(&patch); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 			return
 		}
@@ -463,7 +464,7 @@ func (s *Server) handleManagementTunnelByID(w http.ResponseWriter, r *http.Reque
 	switch r.Method {
 	case http.MethodPatch:
 		var patch map[string]interface{}
-		if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
+		if err := json.NewDecoder(io.LimitReader(r.Body, 1*1024*1024)).Decode(&patch); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 			return
 		}

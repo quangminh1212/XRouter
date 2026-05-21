@@ -2,6 +2,7 @@ package app
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"time"
 
@@ -101,7 +102,7 @@ func (s *Server) handleFallbackChainsAlias(w http.ResponseWriter, r *http.Reques
 			return
 		}
 		var body store.RoutePolicy
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		if err := json.NewDecoder(io.LimitReader(r.Body, 1*1024*1024)).Decode(&body); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 			return
 		}
