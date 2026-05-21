@@ -22,7 +22,7 @@ func (s *Server) handleManagementModelMappings(w http.ResponseWriter, r *http.Re
 		var body struct {
 			Mappings map[string]string `json:"mappings"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		if err := json.NewDecoder(io.LimitReader(r.Body, 1*1024*1024)).Decode(&body); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 			return
 		}
@@ -36,7 +36,7 @@ func (s *Server) handleManagementModelMappings(w http.ResponseWriter, r *http.Re
 		var body struct {
 			Mappings map[string]string `json:"mappings"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		if err := json.NewDecoder(io.LimitReader(r.Body, 1*1024*1024)).Decode(&body); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 			return
 		}
@@ -50,7 +50,7 @@ func (s *Server) handleManagementModelMappings(w http.ResponseWriter, r *http.Re
 		var body struct {
 			Aliases []string `json:"aliases"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil && err != io.EOF {
+		if err := json.NewDecoder(io.LimitReader(r.Body, 1*1024*1024)).Decode(&body); err != nil && err != io.EOF {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 			return
 		}
@@ -78,7 +78,7 @@ func (s *Server) handleManagementModelAliases(w http.ResponseWriter, r *http.Req
 		var body struct {
 			Aliases map[string]string `json:"aliases"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		if err := json.NewDecoder(io.LimitReader(r.Body, 1*1024*1024)).Decode(&body); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 			return
 		}
@@ -92,7 +92,7 @@ func (s *Server) handleManagementModelAliases(w http.ResponseWriter, r *http.Req
 		var body struct {
 			Aliases map[string]string `json:"aliases"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		if err := json.NewDecoder(io.LimitReader(r.Body, 1*1024*1024)).Decode(&body); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 			return
 		}
@@ -106,7 +106,7 @@ func (s *Server) handleManagementModelAliases(w http.ResponseWriter, r *http.Req
 		var body struct {
 			Models []string `json:"models"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil && err != io.EOF {
+		if err := json.NewDecoder(io.LimitReader(r.Body, 1*1024*1024)).Decode(&body); err != nil && err != io.EOF {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 			return
 		}
@@ -134,7 +134,7 @@ func (s *Server) handleManagementDisabledModels(w http.ResponseWriter, r *http.R
 		var body struct {
 			Models []string `json:"models"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		if err := json.NewDecoder(io.LimitReader(r.Body, 1*1024*1024)).Decode(&body); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 			return
 		}
@@ -148,7 +148,7 @@ func (s *Server) handleManagementDisabledModels(w http.ResponseWriter, r *http.R
 		var body struct {
 			Models []string `json:"models"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		if err := json.NewDecoder(io.LimitReader(r.Body, 1*1024*1024)).Decode(&body); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 			return
 		}
@@ -162,7 +162,7 @@ func (s *Server) handleManagementDisabledModels(w http.ResponseWriter, r *http.R
 		var body struct {
 			Models []string `json:"models"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil && err != io.EOF {
+		if err := json.NewDecoder(io.LimitReader(r.Body, 1*1024*1024)).Decode(&body); err != nil && err != io.EOF {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 			return
 		}
@@ -190,7 +190,7 @@ func (s *Server) handleManagementModelAvailability(w http.ResponseWriter, r *htt
 		var body struct {
 			Availability map[string]string `json:"availability"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		if err := json.NewDecoder(io.LimitReader(r.Body, 1*1024*1024)).Decode(&body); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 			return
 		}
@@ -204,7 +204,7 @@ func (s *Server) handleManagementModelAvailability(w http.ResponseWriter, r *htt
 		var body struct {
 			Availability map[string]string `json:"availability"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		if err := json.NewDecoder(io.LimitReader(r.Body, 1*1024*1024)).Decode(&body); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 			return
 		}
@@ -218,7 +218,7 @@ func (s *Server) handleManagementModelAvailability(w http.ResponseWriter, r *htt
 		var body struct {
 			Models []string `json:"models"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil && err != io.EOF {
+		if err := json.NewDecoder(io.LimitReader(r.Body, 1*1024*1024)).Decode(&body); err != nil && err != io.EOF {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 			return
 		}
@@ -262,7 +262,7 @@ func (s *Server) handleManagementRoutingStrategy(w http.ResponseWriter, r *http.
 			StickyRoundRobinLimit      *int   `json:"stickyRoundRobinLimit"`
 			ComboStickyRoundRobinLimit *int   `json:"comboStickyRoundRobinLimit"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		if err := json.NewDecoder(io.LimitReader(r.Body, 1*1024*1024)).Decode(&body); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 			return
 		}
@@ -321,7 +321,7 @@ func (s *Server) handleManagementRetryConfig(w http.ResponseWriter, r *http.Requ
 			MaxRetries         *int `json:"maxRetries"`
 			MaxCooldownSeconds *int `json:"maxCooldownSeconds"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		if err := json.NewDecoder(io.LimitReader(r.Body, 1*1024*1024)).Decode(&body); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 			return
 		}
@@ -364,7 +364,7 @@ func (s *Server) handleManagementProxyPools(w http.ResponseWriter, r *http.Reque
 		writeJSON(w, http.StatusOK, map[string]interface{}{"pools": s.store.ListProxyPools()})
 	case http.MethodPost:
 		var body store.ProxyPool
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		if err := json.NewDecoder(io.LimitReader(r.Body, 1*1024*1024)).Decode(&body); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 			return
 		}
@@ -405,7 +405,7 @@ func (s *Server) handleManagementProxyPoolByID(w http.ResponseWriter, r *http.Re
 		writeJSON(w, http.StatusOK, item)
 	case http.MethodPatch:
 		var patch map[string]interface{}
-		if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
+		if err := json.NewDecoder(io.LimitReader(r.Body, 1*1024*1024)).Decode(&patch); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 			return
 		}
@@ -436,7 +436,7 @@ func (s *Server) handleManagementProviderNodes(w http.ResponseWriter, r *http.Re
 		writeJSON(w, http.StatusOK, map[string]interface{}{"nodes": s.store.ListProviderNodes()})
 	case http.MethodPost:
 		var body store.ProviderNode
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		if err := json.NewDecoder(io.LimitReader(r.Body, 1*1024*1024)).Decode(&body); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 			return
 		}
@@ -477,7 +477,7 @@ func (s *Server) handleManagementProviderNodeByID(w http.ResponseWriter, r *http
 		writeJSON(w, http.StatusOK, item)
 	case http.MethodPatch:
 		var patch map[string]interface{}
-		if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
+		if err := json.NewDecoder(io.LimitReader(r.Body, 1*1024*1024)).Decode(&patch); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 			return
 		}
@@ -508,7 +508,7 @@ func (s *Server) handleManagementComboModels(w http.ResponseWriter, r *http.Requ
 		writeJSON(w, http.StatusOK, map[string]interface{}{"comboModels": s.store.ListComboModels()})
 	case http.MethodPost:
 		var body store.ComboModel
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		if err := json.NewDecoder(io.LimitReader(r.Body, 1*1024*1024)).Decode(&body); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 			return
 		}
@@ -550,7 +550,7 @@ func (s *Server) handleManagementComboModelByAlias(w http.ResponseWriter, r *htt
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "combo model not found"})
 	case http.MethodPatch:
 		var patch map[string]interface{}
-		if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
+		if err := json.NewDecoder(io.LimitReader(r.Body, 1*1024*1024)).Decode(&patch); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 			return
 		}
@@ -581,7 +581,7 @@ func (s *Server) handleManagementRoutePolicies(w http.ResponseWriter, r *http.Re
 		writeJSON(w, http.StatusOK, map[string]interface{}{"policies": s.store.ListRoutePolicies()})
 	case http.MethodPost:
 		var body store.RoutePolicy
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		if err := json.NewDecoder(io.LimitReader(r.Body, 1*1024*1024)).Decode(&body); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 			return
 		}
@@ -613,7 +613,7 @@ func (s *Server) handleManagementRoutePolicyByID(w http.ResponseWriter, r *http.
 	switch r.Method {
 	case http.MethodPatch:
 		var patch map[string]interface{}
-		if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
+		if err := json.NewDecoder(io.LimitReader(r.Body, 1*1024*1024)).Decode(&patch); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 			return
 		}
