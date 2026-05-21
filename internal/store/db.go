@@ -385,6 +385,11 @@ type Settings struct {
 	ForceModelPrefix           bool                                `json:"forceModelPrefix,omitempty"`
 	OAuthExcludedModels        map[string][]string                 `json:"oauthExcludedModels,omitempty"`
 	OAuthModelAlias            map[string][]map[string]interface{} `json:"oauthModelAlias,omitempty"`
+	UsageStatisticsEnabled     bool                                `json:"usageStatisticsEnabled,omitempty"`
+	LoggingToFile              bool                                `json:"loggingToFile,omitempty"`
+	LogsMaxTotalSizeMB         int                                 `json:"logsMaxTotalSizeMb,omitempty"`
+	ErrorLogsMaxFiles          int                                 `json:"errorLogsMaxFiles,omitempty"`
+	WebsocketAuth              bool                                `json:"websocketAuth,omitempty"`
 }
 
 type AmpCode struct {

@@ -378,3 +378,58 @@ func TestV0ManagementOAuthAliasCompatRoutes(t *testing.T) {
 		t.Fatalf("unexpected auth status response: %s", statusRec.Body.String())
 	}
 }
+
+func TestV0ManagementMiscAliasCompatRoutes(t *testing.T) {
+	srv := newTestServer(t)
+	boolSteps := []struct {
+		path string
+		want string
+	}{
+		{path: "/v0/management/usage-statistics-enabled", want: `"usage-statistics-enabled":true`},
+		{path: "/v0/management/logging-to-file", want: `"logging-to-file":true`},
+		{path: "/v0/management/ws-auth", want: `"ws-auth":true`},
+	}
+	for _, step := range boolSteps {
+		req := httptest.NewRequest(http.MethodPatch, step.path, bytes.NewBufferString(`{"value":true}`))
+		req.Host = "localhost"
+		rec := httptest.NewRecorder()
+		srv.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200 %s, got %d body=%s", step.path, rec.Code, rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), step.want) {
+			t.Fatalf("expected %q, got %s", step.want, rec.Body.String())
+		}
+	}
+
+	intSteps := []struct {
+		path string
+		body string
+		want string
+	}{
+		{path: "/v0/management/logs-max-total-size-mb", body: `{"value":64}`, want: `"logs-max-total-size-mb":64`},
+		{path: "/v0/management/error-logs-max-files", body: `{"value":8}`, want: `"error-logs-max-files":8`},
+	}
+	for _, step := range intSteps {
+		req := httptest.NewRequest(http.MethodPut, step.path, bytes.NewBufferString(step.body))
+		req.Host = "localhost"
+		rec := httptest.NewRecorder()
+		srv.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200 %s, got %d body=%s", step.path, rec.Code, rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), step.want) {
+			t.Fatalf("expected %q, got %s", step.want, rec.Body.String())
+		}
+	}
+
+	for _, path := range []string{"/v0/management/latest-version", "/v0/management/logs", "/v0/management/request-error-logs"} {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req.Host = "localhost"
+		rec := httptest.NewRecorder()
+		srv.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200 %s, got %d body=%s", path, rec.Code, rec.Body.String())
+		}
+	}
+}
