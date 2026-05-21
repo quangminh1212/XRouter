@@ -133,8 +133,6 @@ var providerCatalog = map[string]ProviderCatalogEntry{
 	"roo":                  {Provider: "roo", AuthType: "oauth", APIType: "openai", BaseURL: "https://api.roocode.com/v1", FallbackModels: []string{"roo/claude-sonnet-4.5"}},
 	"hermes":               {Provider: "hermes", AuthType: "apikey", APIType: "openai", BaseURL: "https://api.hermes.ai/v1", FallbackModels: []string{"hermes/Hermes-4-70B"}},
 	"vertex-partner":       {Provider: "vertex-partner", AuthType: "apikey", APIType: "openai", BaseURL: "https://aiplatform.googleapis.com/v1beta1", FallbackModels: []string{"vertex-partner/gemini-2.5-pro"}},
-	"linkup":               {Provider: "linkup", AuthType: "apikey", APIType: "search", BaseURL: "https://api.linkup.so/v1"},
-	"linkup-search":        {Provider: "linkup-search", AuthType: "apikey", APIType: "search", BaseURL: "https://api.linkup.so/v1"},
 	"jina-reader":          {Provider: "jina-reader", AuthType: "apikey", APIType: "fetch", BaseURL: "https://r.jina.ai"},
 	"firecrawl":            {Provider: "firecrawl", AuthType: "apikey", APIType: "fetch", BaseURL: "https://api.firecrawl.dev/v1/scrape"},
 	"fal-ai":               {Provider: "fal-ai", AuthType: "apikey", APIType: "image", BaseURL: "https://fal.run"},
