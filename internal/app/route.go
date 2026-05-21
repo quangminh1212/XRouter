@@ -75,6 +75,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/v1/responses/compact", s.handleProxy)
 	s.mux.HandleFunc("/v1/responses/stream", s.handleProxy)
 	s.mux.HandleFunc("/backend-api/codex/responses", s.handleProxy)
+	s.mux.HandleFunc("/backend-api/codex/responses/compact", s.handleProxy)
 	s.mux.HandleFunc("/v1/search", s.handleSearch)
 	s.mux.HandleFunc("/v1/web/search", s.handleSearch)
 	s.mux.HandleFunc("/v1/web/fetch", s.handleWebFetch)

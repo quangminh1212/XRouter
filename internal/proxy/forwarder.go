@@ -167,7 +167,10 @@ func resolveEndpoint(c store.ProviderConnection, model, path string) (string, st
 		return "", "", fmt.Errorf("provider %s missing baseUrl variables", c.Provider)
 	}
 
-	if path == "/v1/responses" || path == "/v1/responses/compact" || path == "/v1/responses/stream" || path == "/backend-api/codex/responses" || apiType == "responses" {
+	if path == "/v1/responses" || path == "/v1/responses/compact" || path == "/v1/responses/stream" || path == "/backend-api/codex/responses" || path == "/backend-api/codex/responses/compact" || apiType == "responses" {
+		if path == "/backend-api/codex/responses/compact" {
+			return joinOpenAIEndpoint(baseURL, "/responses/compact"), "openai", nil
+		}
 		return joinOpenAIEndpoint(baseURL, "/responses"), "openai", nil
 	}
 	if path == "/v1/completions" {
@@ -1014,6 +1017,59 @@ func buildSearchRequest(ctx context.Context, c store.ProviderConnection, baseURL
 		return postJSONSearch(ctx, baseURL+"/search", c, map[string]interface{}{"query": query, "numResults": maxResults})
 	case "perplexity-search":
 		return postJSONSearch(ctx, baseURL+"/search", c, map[string]interface{}{"query": query, "max_results": maxResults})
+	case "linkup", "linkup-search":
+		return postJSONSearch(ctx, baseURL+"/search", c, map[string]interface{}{"q": query, "depth": "standard", "outputType": "searchResults", "limit": maxResults})
+	case "searchapi":
+		u, err := url.Parse(baseURL)
+		if err != nil {
+			return nil, err
+		}
+		q := u.Query()
+		q.Set("q", query)
+		q.Set("engine", "google")
+		q.Set("num", strconv.Itoa(maxResults))
+		q.Set("api_key", c.APIKey)
+		u.RawQuery = q.Encode()
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Accept", "application/json")
+		return req, nil
+	case "youcom", "youcom-search":
+		u, err := url.Parse(baseURL)
+		if err != nil {
+			return nil, err
+		}
+		q := u.Query()
+		q.Set("query", query)
+		q.Set("num_web_results", strconv.Itoa(maxResults))
+		u.RawQuery = q.Encode()
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Accept", "application/json")
+		req.Header.Set("X-API-Key", c.APIKey)
+		return req, nil
+	case "searxng", "searxng-search":
+		u, err := url.Parse(baseURL)
+		if err != nil {
+			return nil, err
+		}
+		q := u.Query()
+		q.Set("q", query)
+		q.Set("format", "json")
+		u.RawQuery = q.Encode()
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Accept", "application/json")
+		if c.APIKey != "" {
+			req.Header.Set("Authorization", "Bearer "+c.APIKey)
+		}
+		return req, nil
 	case "google-pse-search":
 		u, err := url.Parse(baseURL)
 		if err != nil {
@@ -1065,6 +1121,14 @@ func normalizeSearchResults(provider string, raw interface{}) []SearchResult {
 	case "serper", "serper-search":
 		return normalizeResultArray(root["organic"], "title", "link", "snippet")
 	case "tavily", "tavily-search", "exa", "exa-search", "perplexity-search":
+		return normalizeResultArray(root["results"], "title", "url", "content")
+	case "linkup", "linkup-search":
+		return normalizeResultArray(root["results"], "name", "url", "snippet")
+	case "searchapi":
+		return normalizeResultArray(root["organic_results"], "title", "link", "snippet")
+	case "youcom", "youcom-search":
+		return normalizeResultArray(root["hits"], "title", "url", "description")
+	case "searxng", "searxng-search":
 		return normalizeResultArray(root["results"], "title", "url", "content")
 	case "google-pse-search":
 		return normalizeResultArray(root["items"], "title", "link", "snippet")
