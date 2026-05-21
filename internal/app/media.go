@@ -293,6 +293,10 @@ func (s *Server) handleMediaProxy(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
 		return
 	}
+	normalizedPath := r.URL.Path
+	if strings.HasPrefix(normalizedPath, "/api/v1/") {
+		normalizedPath = strings.TrimPrefix(normalizedPath, "/api")
+	}
 	apiKey, err := s.authorize(r)
 	if err != nil {
 		if strings.Contains(err.Error(), "rate limit exceeded") {
@@ -309,7 +313,7 @@ func (s *Server) handleMediaProxy(w http.ResponseWriter, r *http.Request) {
 	}
 	providerHint := ""
 	contentType := strings.ToLower(r.Header.Get("Content-Type"))
-	if strings.Contains(contentType, "application/json") || r.URL.Path == "/v1/embeddings" || r.URL.Path == "/v1/audio/speech" {
+	if strings.Contains(contentType, "application/json") || normalizedPath == "/v1/embeddings" || normalizedPath == "/v1/audio/speech" {
 		var payload map[string]interface{}
 		if err := json.Unmarshal(body, &payload); err == nil {
 			if v, ok := payload["provider"].(string); ok {
@@ -329,7 +333,7 @@ func (s *Server) handleMediaProxy(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	resp, err := s.forwarder.ForwardMedia(r.Context(), proxy.MediaRequest{
-		Path:     r.URL.Path,
+		Path:     normalizedPath,
 		Body:     body,
 		Provider: providerHint,
 		Headers:  r.Header.Clone(),
