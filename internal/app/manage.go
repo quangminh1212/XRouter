@@ -460,7 +460,9 @@ func (s *Server) handleManagementProviderNodeByID(w http.ResponseWriter, r *http
 		writeJSON(w, http.StatusForbidden, map[string]string{"error": "management api is restricted to localhost"})
 		return
 	}
-	id := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/management/provider-nodes/"), "/")
+	id := strings.Trim(strings.TrimPrefix(strings.TrimPrefix(r.URL.Path, "/api/management"), "/api/provider-nodes/"), "/")
+	id = strings.TrimPrefix(id, "provider-nodes/")
+	id = strings.TrimSpace(id)
 	if id == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "missing provider node id"})
 		return

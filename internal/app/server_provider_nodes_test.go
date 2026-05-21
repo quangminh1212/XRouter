@@ -82,3 +82,27 @@ func TestProviderNodeFiltersUpstreamCandidate(t *testing.T) {
 		t.Fatalf("expected provider B via node filter, got %#v", payload)
 	}
 }
+
+func TestProviderNodesAliasCRUD(t *testing.T) {
+	srv := newTestServer(t)
+	createReq := httptest.NewRequest(http.MethodPost, "/api/provider-nodes", bytes.NewBufferString(`{"name":"node-a","provider":"openai"}`))
+	createReq.Host = "localhost"
+	createRec := httptest.NewRecorder()
+	srv.ServeHTTP(createRec, createReq)
+	if createRec.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d body=%s", createRec.Code, createRec.Body.String())
+	}
+	var created struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(createRec.Body.Bytes(), &created); err != nil || created.ID == "" {
+		t.Fatalf("decode created node: id=%q err=%v", created.ID, err)
+	}
+	getReq := httptest.NewRequest(http.MethodGet, "/api/provider-nodes/"+created.ID, nil)
+	getReq.Host = "localhost"
+	getRec := httptest.NewRecorder()
+	srv.ServeHTTP(getRec, getReq)
+	if getRec.Code != http.StatusOK {
+		t.Fatalf("expected 200 get, got %d body=%s", getRec.Code, getRec.Body.String())
+	}
+}
