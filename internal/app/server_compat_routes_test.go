@@ -236,3 +236,44 @@ func TestV0ManagementAmpCodePatchCompatRoutes(t *testing.T) {
 		})
 	}
 }
+
+func TestV0ManagementProxyAndRetryAliasCompatRoutes(t *testing.T) {
+	srv := newTestServer(t)
+	steps := []struct {
+		method string
+		path   string
+		body   string
+		want   string
+	}{
+		{method: http.MethodPut, path: "/v0/management/proxy-url", body: `{"value":"http://proxy.example.com"}`, want: `proxy.example.com`},
+		{method: http.MethodPatch, path: "/v0/management/request-retry", body: `{"value":5}`, want: `"request-retry":5`},
+		{method: http.MethodPatch, path: "/v0/management/max-retry-interval", body: `{"value":30}`, want: `"max-retry-interval":30`},
+		{method: http.MethodPut, path: "/v0/management/routing/strategy", body: `{"value":"round-robin"}`, want: `"strategy":"round-robin"`},
+		{method: http.MethodPatch, path: "/v0/management/force-model-prefix", body: `{"value":true}`, want: `"force-model-prefix":true`},
+	}
+	for _, step := range steps {
+		t.Run(step.path, func(t *testing.T) {
+			req := httptest.NewRequest(step.method, step.path, bytes.NewBufferString(step.body))
+			req.Host = "localhost"
+			rec := httptest.NewRecorder()
+			srv.ServeHTTP(rec, req)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("expected 200 %s %s, got %d body=%s", step.method, step.path, rec.Code, rec.Body.String())
+			}
+			if !strings.Contains(rec.Body.String(), step.want) {
+				t.Fatalf("expected response to contain %q, got %s", step.want, rec.Body.String())
+			}
+		})
+	}
+
+	deleteReq := httptest.NewRequest(http.MethodDelete, "/v0/management/proxy-url", nil)
+	deleteReq.Host = "localhost"
+	deleteRec := httptest.NewRecorder()
+	srv.ServeHTTP(deleteRec, deleteReq)
+	if deleteRec.Code != http.StatusOK {
+		t.Fatalf("expected 200 delete proxy-url, got %d body=%s", deleteRec.Code, deleteRec.Body.String())
+	}
+	if !strings.Contains(deleteRec.Body.String(), `"proxy-url":""`) {
+		t.Fatalf("expected proxy-url cleared, got %s", deleteRec.Body.String())
+	}
+}

@@ -382,6 +382,7 @@ type Settings struct {
 	AmpCode                    AmpCode           `json:"ampcode,omitempty"`
 	Debug                      bool              `json:"debug,omitempty"`
 	RequestLog                 bool              `json:"requestLog,omitempty"`
+	ForceModelPrefix           bool              `json:"forceModelPrefix,omitempty"`
 }
 
 type AmpCode struct {
