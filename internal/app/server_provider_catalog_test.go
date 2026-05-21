@@ -254,3 +254,52 @@ func TestProviderCatalogIncludesWebCookieProviders(t *testing.T) {
 		}
 	}
 }
+
+func TestProviderCatalogIncludesLongTailParityProviders(t *testing.T) {
+	srv := newTestServer(t)
+	req := httptest.NewRequest(http.MethodGet, "/api/providers/catalog", nil)
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	var payload struct {
+		Count     int                          `json:"count"`
+		Providers []store.ProviderCatalogEntry `json:"providers"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if payload.Count < 121 {
+		t.Fatalf("expected at least 121 providers, got %d", payload.Count)
+	}
+	want := map[string]bool{
+		"alicode":        false,
+		"blackbox":       false,
+		"cursor":         false,
+		"iflow":          false,
+		"kilocode":       false,
+		"ollama":         false,
+		"openclaw":       false,
+		"sdwebui":        false,
+		"searchapi":      false,
+		"searxng":        false,
+		"stability-ai":   false,
+		"topaz":          false,
+		"tortoise":       false,
+		"vertex-partner": false,
+		"volcengine-ark": false,
+		"xiaomi-mimo":    false,
+		"youcom":         false,
+	}
+	for _, provider := range payload.Providers {
+		if _, ok := want[provider.Provider]; ok {
+			want[provider.Provider] = true
+		}
+	}
+	for name, found := range want {
+		if !found {
+			t.Fatalf("missing long-tail provider %s in catalog", name)
+		}
+	}
+}
