@@ -108,6 +108,13 @@ const dashboardHTML = `<!doctype html>
     <div class="card"><div class="label">Cost</div><div id="totalCost" class="value">$0.0000</div></div>
   </section>
   <section class="card">
+    <h2>Provider Metrics</h2>
+    <table>
+      <thead><tr><th>Provider</th><th>Requests</th><th>Failures</th><th>Success</th><th>Avg Latency</th><th>Bytes</th></tr></thead>
+      <tbody id="providerMetrics"><tr><td colspan="6">Loading...</td></tr></tbody>
+    </table>
+  </section>
+  <section class="card">
     <h2>Recent Requests</h2>
     <div class="toolbar">
       <input id="searchInput" type="text" placeholder="Search model, path, error...">
@@ -171,6 +178,16 @@ const dashboardHTML = `<!doctype html>
         '<td class="error">' + (item.error || '') + '</td>' +
       '</tr>').join('') : '<tr><td colspan="6">No requests yet</td></tr>';
     }
+    function setProviderMetrics(items = []) {
+      providerMetrics.innerHTML = items.length ? items.map(item => '<tr>' +
+        '<td><code>' + (item.provider || '') + '</code></td>' +
+        '<td>' + fmt.format(item.requests || 0) + '</td>' +
+        '<td>' + fmt.format(item.failures || 0) + '</td>' +
+        '<td>' + Math.round(Number(item.successRate || 0) * 100) + '%</td>' +
+        '<td>' + fmt.format(item.latencyMsAvg || 0) + 'ms</td>' +
+        '<td>' + fmt.format(item.responseBytes || 0) + '</td>' +
+      '</tr>').join('') : '<tr><td colspan="6">No provider metrics yet</td></tr>';
+    }
     async function showLogDetail(id) {
       if (!id) return;
       logDetail.textContent = 'Loading ' + id + '...';
@@ -183,10 +200,12 @@ const dashboardHTML = `<!doctype html>
       }
     }
     async function loadInitial() {
-      const [statsRes, logsRes] = await Promise.all([fetch('/api/usage/stats'), fetch('/api/usage/logs?limit=50')]);
+      const [statsRes, logsRes, metricsRes] = await Promise.all([fetch('/api/usage/stats'), fetch('/api/usage/logs?limit=50'), fetch('/api/providers/metrics')]);
       setStats(await statsRes.json());
       const payload = await logsRes.json();
       setLogs(payload.items || []);
+      const metrics = await metricsRes.json();
+      setProviderMetrics(metrics.metrics || []);
     }
     loadInitial().catch(err => { streamStatus.textContent = err.message; streamStatus.className = 'error'; });
     const source = new EventSource('/api/usage/stream?limit=50');
