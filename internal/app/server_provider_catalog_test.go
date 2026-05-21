@@ -407,3 +407,22 @@ func TestProviderCatalogIncludesRemainingAssetNames(t *testing.T) {
 		}
 	}
 }
+
+func TestProviderCatalogParityOmniRouteAnd9Router(t *testing.T) {
+	srv := newTestServer(t)
+	req := httptest.NewRequest(http.MethodGet, "/api/providers/catalog", nil)
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	var payload struct {
+		Count int `json:"count"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if payload.Count < 169 {
+		t.Fatalf("expected provider catalog parity >= 169 entries (OmniRoute 67 + 9router 100 + extras), got %d", payload.Count)
+	}
+}
