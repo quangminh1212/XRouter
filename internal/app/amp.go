@@ -2,6 +2,7 @@ package app
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"strings"
 
@@ -42,7 +43,7 @@ func (s *Server) handleAmpUpstreamURL(w http.ResponseWriter, r *http.Request) {
 		var body struct {
 			Value string `json:"value"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		if err := json.NewDecoder(io.LimitReader(r.Body, 1*1024*1024)).Decode(&body); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 			return
 		}
@@ -80,7 +81,7 @@ func (s *Server) handleAmpUpstreamAPIKey(w http.ResponseWriter, r *http.Request)
 		var body struct {
 			Value string `json:"value"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		if err := json.NewDecoder(io.LimitReader(r.Body, 1*1024*1024)).Decode(&body); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 			return
 		}
@@ -134,7 +135,7 @@ func (s *Server) handleAmpUpstreamAPIKeys(w http.ResponseWriter, r *http.Request
 		var body struct {
 			Value []store.AmpUpstreamKey `json:"value"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		if err := json.NewDecoder(io.LimitReader(r.Body, 1*1024*1024)).Decode(&body); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 			return
 		}
@@ -150,7 +151,7 @@ func (s *Server) handleAmpUpstreamAPIKeys(w http.ResponseWriter, r *http.Request
 		var body struct {
 			Value []store.AmpUpstreamKey `json:"value"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		if err := json.NewDecoder(io.LimitReader(r.Body, 1*1024*1024)).Decode(&body); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 			return
 		}
@@ -180,7 +181,7 @@ func (s *Server) handleAmpUpstreamAPIKeys(w http.ResponseWriter, r *http.Request
 		var body struct {
 			Value []string `json:"value"`
 		}
-		_ = json.NewDecoder(r.Body).Decode(&body)
+		_ = json.NewDecoder(io.LimitReader(r.Body, 1*1024*1024)).Decode(&body)
 		amp, err := s.updateAmpCode(func(amp *store.AmpCode) {
 			if len(body.Value) == 0 {
 				amp.UpstreamAPIKeys = nil
@@ -221,7 +222,7 @@ func (s *Server) handleAmpRestrictManagementToLocalhost(w http.ResponseWriter, r
 		var body struct {
 			Value bool `json:"value"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		if err := json.NewDecoder(io.LimitReader(r.Body, 1*1024*1024)).Decode(&body); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 			return
 		}
@@ -250,7 +251,7 @@ func (s *Server) handleAmpForceModelMappings(w http.ResponseWriter, r *http.Requ
 		var body struct {
 			Value bool `json:"value"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		if err := json.NewDecoder(io.LimitReader(r.Body, 1*1024*1024)).Decode(&body); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 			return
 		}
@@ -279,7 +280,7 @@ func (s *Server) handleAmpModelMappings(w http.ResponseWriter, r *http.Request) 
 		var body struct {
 			Value []store.AmpModelMapping `json:"value"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		if err := json.NewDecoder(io.LimitReader(r.Body, 1*1024*1024)).Decode(&body); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 			return
 		}
@@ -295,7 +296,7 @@ func (s *Server) handleAmpModelMappings(w http.ResponseWriter, r *http.Request) 
 		var body struct {
 			Value []store.AmpModelMapping `json:"value"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		if err := json.NewDecoder(io.LimitReader(r.Body, 1*1024*1024)).Decode(&body); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 			return
 		}
@@ -325,7 +326,7 @@ func (s *Server) handleAmpModelMappings(w http.ResponseWriter, r *http.Request) 
 		var body struct {
 			Value []string `json:"value"`
 		}
-		_ = json.NewDecoder(r.Body).Decode(&body)
+		_ = json.NewDecoder(io.LimitReader(r.Body, 1*1024*1024)).Decode(&body)
 		amp, err := s.updateAmpCode(func(amp *store.AmpCode) {
 			if len(body.Value) == 0 {
 				amp.ModelMappings = nil
