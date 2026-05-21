@@ -2,6 +2,7 @@ package app
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"strings"
 
@@ -18,7 +19,7 @@ func (s *Server) handleManagementOAuthExcludedModels(w http.ResponseWriter, r *h
 		writeJSON(w, http.StatusOK, map[string]interface{}{"oauth-excluded-models": s.store.GetSettings().OAuthExcludedModels})
 	case http.MethodPut:
 		var body map[string][]string
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		if err := json.NewDecoder(io.LimitReader(r.Body, 1*1024*1024)).Decode(&body); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 			return
 		}
@@ -33,7 +34,7 @@ func (s *Server) handleManagementOAuthExcludedModels(w http.ResponseWriter, r *h
 			Provider string   `json:"provider"`
 			Models   []string `json:"models"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || strings.TrimSpace(body.Provider) == "" {
+		if err := json.NewDecoder(io.LimitReader(r.Body, 1*1024*1024)).Decode(&body); err != nil || strings.TrimSpace(body.Provider) == "" {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 			return
 		}
@@ -90,7 +91,7 @@ func (s *Server) handleManagementOAuthModelAlias(w http.ResponseWriter, r *http.
 		writeJSON(w, http.StatusOK, map[string]interface{}{"oauth-model-alias": s.store.GetSettings().OAuthModelAlias})
 	case http.MethodPut:
 		var body map[string][]map[string]interface{}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		if err := json.NewDecoder(io.LimitReader(r.Body, 1*1024*1024)).Decode(&body); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 			return
 		}
@@ -106,7 +107,7 @@ func (s *Server) handleManagementOAuthModelAlias(w http.ResponseWriter, r *http.
 			Channel  string                   `json:"channel"`
 			Aliases  []map[string]interface{} `json:"aliases"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		if err := json.NewDecoder(io.LimitReader(r.Body, 1*1024*1024)).Decode(&body); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 			return
 		}
