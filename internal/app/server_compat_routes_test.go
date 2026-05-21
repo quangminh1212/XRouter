@@ -277,3 +277,54 @@ func TestV0ManagementProxyAndRetryAliasCompatRoutes(t *testing.T) {
 		t.Fatalf("expected proxy-url cleared, got %s", deleteRec.Body.String())
 	}
 }
+
+func TestV0ManagementProviderKeyAliasCompatRoutes(t *testing.T) {
+	srv := newTestServer(t)
+	steps := []struct {
+		path string
+		body string
+		want string
+	}{
+		{path: "/v0/management/gemini-api-key", body: `{"value":"gemini-secret"}`, want: `"gemini-api-key"`},
+		{path: "/v0/management/claude-api-key", body: `{"value":"claude-secret"}`, want: `"claude-api-key"`},
+		{path: "/v0/management/codex-api-key", body: `{"value":{"api-key":"codex-secret","base-url":"https://codex.example.com"}}`, want: `"codex-api-key"`},
+		{path: "/v0/management/vertex-api-key", body: `{"value":"vertex-secret"}`, want: `"vertex-api-key"`},
+		{path: "/v0/management/openai-compatibility", body: `{"value":{"api-key":"openai-secret","base-url":"https://compat.example.com","api-type":"openai"}}`, want: `"openai-compatibility"`},
+	}
+	for _, step := range steps {
+		t.Run(step.path, func(t *testing.T) {
+			putReq := httptest.NewRequest(http.MethodPut, step.path, bytes.NewBufferString(step.body))
+			putReq.Host = "localhost"
+			putRec := httptest.NewRecorder()
+			srv.ServeHTTP(putRec, putReq)
+			if putRec.Code != http.StatusOK {
+				t.Fatalf("expected 200 put, got %d body=%s", putRec.Code, putRec.Body.String())
+			}
+			if !strings.Contains(putRec.Body.String(), step.want) {
+				t.Fatalf("expected response to contain %q, got %s", step.want, putRec.Body.String())
+			}
+
+			getReq := httptest.NewRequest(http.MethodGet, step.path, nil)
+			getReq.Host = "localhost"
+			getRec := httptest.NewRecorder()
+			srv.ServeHTTP(getRec, getReq)
+			if getRec.Code != http.StatusOK {
+				t.Fatalf("expected 200 get, got %d body=%s", getRec.Code, getRec.Body.String())
+			}
+			if !strings.Contains(getRec.Body.String(), step.want) {
+				t.Fatalf("expected get response to contain %q, got %s", step.want, getRec.Body.String())
+			}
+		})
+	}
+
+	deleteReq := httptest.NewRequest(http.MethodDelete, "/v0/management/gemini-api-key?api-key=gemini-secret", nil)
+	deleteReq.Host = "localhost"
+	deleteRec := httptest.NewRecorder()
+	srv.ServeHTTP(deleteRec, deleteReq)
+	if deleteRec.Code != http.StatusOK {
+		t.Fatalf("expected 200 delete, got %d body=%s", deleteRec.Code, deleteRec.Body.String())
+	}
+	if !strings.Contains(deleteRec.Body.String(), `"deleted":1`) {
+		t.Fatalf("expected one deleted key, got %s", deleteRec.Body.String())
+	}
+}
