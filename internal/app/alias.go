@@ -662,10 +662,10 @@ func (s *Server) handleManagementLatestVersion(w http.ResponseWriter, r *http.Re
 	writeJSON(w, http.StatusOK, map[string]string{"latest-version": latest})
 }
 
-func (s *Server) handleManagementBoolValue(w http.ResponseWriter, r *http.Request, key string, current bool, patchKey string) {
+func (s *Server) handleManagementBoolValue(w http.ResponseWriter, r *http.Request, key string, value bool, patchKey string) {
 	switch r.Method {
 	case http.MethodGet:
-		writeJSON(w, http.StatusOK, map[string]bool{key: current})
+		writeJSON(w, http.StatusOK, map[string]bool{key: value})
 	case http.MethodPut, http.MethodPatch:
 		var body struct {
 			Value bool `json:"value"`
