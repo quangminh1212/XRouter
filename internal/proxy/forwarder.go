@@ -434,7 +434,66 @@ func normalizeBodyForMode(body map[string]interface{}, providerHint, mode string
 	if mode == "gemini" {
 		return normalizeOpenAIToGeminiBody(body, providerHint)
 	}
+	if mode == "anthropic" {
+		return normalizeOpenAIToAnthropicBody(body, providerHint)
+	}
 	return normalizeModelForUpstream(body, providerHint)
+}
+
+func normalizeOpenAIToAnthropicBody(body map[string]interface{}, providerHint string) []byte {
+	if providerHint != "" {
+		if model, ok := body["model"].(string); ok && strings.HasPrefix(model, providerHint+"/") {
+			body["model"] = strings.TrimPrefix(model, providerHint+"/")
+		}
+	}
+	out := cloneRequestBody(body)
+	if messages, ok := body["messages"].([]interface{}); ok {
+		normalized := make([]map[string]interface{}, 0, len(messages))
+		systemChunks := make([]string, 0)
+		for _, raw := range messages {
+			item, _ := raw.(map[string]interface{})
+			role := strings.ToLower(strings.TrimSpace(fmt.Sprint(item["role"])))
+			contentText := extractMessageText(item["content"])
+			if strings.TrimSpace(contentText) == "" {
+				continue
+			}
+			if role == "system" || role == "developer" {
+				systemChunks = append(systemChunks, contentText)
+				continue
+			}
+			if role != "assistant" {
+				role = "user"
+			}
+			normalized = append(normalized, map[string]interface{}{
+				"role":    role,
+				"content": contentText,
+			})
+		}
+		out["messages"] = normalized
+		if len(systemChunks) > 0 {
+			out["system"] = strings.Join(systemChunks, "\n\n")
+		}
+	}
+	raw, _ := json.Marshal(out)
+	return raw
+}
+
+func extractMessageText(content interface{}) string {
+	switch value := content.(type) {
+	case string:
+		return strings.TrimSpace(value)
+	case []interface{}:
+		chunks := make([]string, 0, len(value))
+		for _, rawPart := range value {
+			part, _ := rawPart.(map[string]interface{})
+			if text, ok := part["text"].(string); ok && strings.TrimSpace(text) != "" {
+				chunks = append(chunks, strings.TrimSpace(text))
+			}
+		}
+		return strings.Join(chunks, "\n")
+	default:
+		return ""
+	}
 }
 
 func normalizeOpenAIToGeminiBody(body map[string]interface{}, providerHint string) []byte {

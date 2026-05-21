@@ -537,6 +537,18 @@ func TestProviderEndpointRegressionMatrix(t *testing.T) {
 			contentType:  "application/json",
 		},
 		{
+			name:         "anthropic system adapter",
+			provider:     "anthropic-compatible",
+			apiType:      "anthropic",
+			path:         "/v1/chat/completions",
+			model:        "anthropic-compatible/claude-test",
+			requestBody:  `{"model":"anthropic-compatible/claude-test","messages":[{"role":"system","content":"follow policy"},{"role":"user","content":"hello"}]}`,
+			wantPath:     "/v1/messages",
+			wantContains: `"system":"follow policy"`,
+			responseBody: `{"id":"msg_2","content":[{"type":"text","text":"ok"}]}`,
+			contentType:  "application/json",
+		},
+		{
 			name:         "gemini compatible chat adapter",
 			provider:     "gemini-compatible",
 			apiType:      "gemini",
