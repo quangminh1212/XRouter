@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"sort"
 	"strings"
 
 	"xrouter/internal/store"
@@ -60,6 +61,64 @@ func (s *Server) handleProviderCatalog(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"providers": filtered,
 		"count":     len(filtered),
+	})
+}
+
+func (s *Server) handleProviderMetrics(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+
+	type metric struct {
+		Provider      string  `json:"provider"`
+		Requests      int64   `json:"requests"`
+		Failures      int64   `json:"failures"`
+		SuccessRate   float64 `json:"successRate"`
+		LatencyMsAvg  int64   `json:"latencyMsAvg"`
+		ResponseBytes int64   `json:"responseBytes"`
+	}
+
+	logs := s.store.GetRequestLogs(0)
+	buckets := map[string]*metric{}
+	latencyTotals := map[string]int64{}
+	for _, item := range logs {
+		provider := strings.TrimSpace(item.Provider)
+		if provider == "" {
+			provider = "unknown"
+		}
+		current := buckets[provider]
+		if current == nil {
+			current = &metric{Provider: provider}
+			buckets[provider] = current
+		}
+		current.Requests++
+		if item.StatusCode < 200 || item.StatusCode >= 400 {
+			current.Failures++
+		}
+		latencyTotals[provider] += item.LatencyMs
+		current.ResponseBytes += int64(item.ResponseBytes)
+	}
+
+	items := make([]metric, 0, len(buckets))
+	for provider, current := range buckets {
+		if current.Requests > 0 {
+			current.SuccessRate = float64(current.Requests-current.Failures) / float64(current.Requests)
+			current.LatencyMsAvg = latencyTotals[provider] / current.Requests
+		}
+		items = append(items, *current)
+	}
+
+	sort.Slice(items, func(i, j int) bool {
+		if items[i].Requests == items[j].Requests {
+			return items[i].Provider < items[j].Provider
+		}
+		return items[i].Requests > items[j].Requests
+	})
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"count":   len(items),
+		"metrics": items,
 	})
 }
 
