@@ -165,3 +165,47 @@ func TestV0ManagementAmpCodeCompatRoutes(t *testing.T) {
 		t.Fatalf("unexpected model mappings: %#v", payload.AmpCode.ModelMappings)
 	}
 }
+
+func TestV0ManagementDebugRequestLogAndUsageQueueCompat(t *testing.T) {
+	srv := newTestServer(t)
+
+	putDebug := httptest.NewRequest(http.MethodPut, "/v0/management/debug", bytes.NewBufferString(`{"value":true}`))
+	putDebug.Host = "localhost"
+	putDebugRec := httptest.NewRecorder()
+	srv.ServeHTTP(putDebugRec, putDebug)
+	if putDebugRec.Code != http.StatusOK {
+		t.Fatalf("expected 200 put debug, got %d body=%s", putDebugRec.Code, putDebugRec.Body.String())
+	}
+	if !strings.Contains(putDebugRec.Body.String(), `"debug":true`) {
+		t.Fatalf("unexpected debug response: %s", putDebugRec.Body.String())
+	}
+
+	putLog := httptest.NewRequest(http.MethodPatch, "/v0/management/request-log", bytes.NewBufferString(`{"value":true}`))
+	putLog.Host = "localhost"
+	putLogRec := httptest.NewRecorder()
+	srv.ServeHTTP(putLogRec, putLog)
+	if putLogRec.Code != http.StatusOK {
+		t.Fatalf("expected 200 put request-log, got %d body=%s", putLogRec.Code, putLogRec.Body.String())
+	}
+	if !strings.Contains(putLogRec.Body.String(), `"request-log":true`) {
+		t.Fatalf("unexpected request-log response: %s", putLogRec.Body.String())
+	}
+
+	queueReq := httptest.NewRequest(http.MethodGet, "/v0/management/usage-queue?count=2", nil)
+	queueReq.Host = "localhost"
+	queueRec := httptest.NewRecorder()
+	srv.ServeHTTP(queueRec, queueReq)
+	if queueRec.Code != http.StatusOK {
+		t.Fatalf("expected 200 usage-queue, got %d body=%s", queueRec.Code, queueRec.Body.String())
+	}
+	var payload struct {
+		Items []map[string]interface{} `json:"items"`
+		Count int                      `json:"count"`
+	}
+	if err := json.Unmarshal(queueRec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode usage-queue: %v", err)
+	}
+	if payload.Count != 0 || payload.Items == nil {
+		t.Fatalf("unexpected usage-queue payload: %#v", payload)
+	}
+}

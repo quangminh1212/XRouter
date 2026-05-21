@@ -380,6 +380,8 @@ type Settings struct {
 	MaxCooldownSeconds         int               `json:"maxCooldownSeconds,omitempty"`
 	DefaultRequestsPerMinute   int               `json:"defaultRequestsPerMinute,omitempty"`
 	AmpCode                    AmpCode           `json:"ampcode,omitempty"`
+	Debug                      bool              `json:"debug,omitempty"`
+	RequestLog                 bool              `json:"requestLog,omitempty"`
 }
 
 type AmpCode struct {
