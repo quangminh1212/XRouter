@@ -83,3 +83,78 @@ func TestAPIV1CompatWebFetchRoute(t *testing.T) {
 		t.Fatalf("unexpected payload: %#v", payload)
 	}
 }
+
+func TestAPIV1CompatModerationsRoute(t *testing.T) {
+	srv := newTestServer(t)
+	if _, err := srv.store.UpdateSettings(map[string]interface{}{"requireApiKey": false}); err != nil {
+		t.Fatalf("disable api key auth: %v", err)
+	}
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/moderations" {
+			t.Fatalf("unexpected upstream path: %s", r.URL.Path)
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{"results": []map[string]bool{{"flagged": false}}})
+	}))
+	defer upstream.Close()
+	_, _ = srv.store.CreateProviderConnection(store.ProviderConnection{
+		Provider: "openai", Name: "openai moderations compat", AuthType: "apikey", APIKey: "x", IsActive: true,
+		ProviderSpecificData: map[string]interface{}{"baseUrl": upstream.URL, "apiType": "openai"},
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/moderations", bytes.NewBufferString(`{"input":"hello"}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestAPIV1CompatRerankRoute(t *testing.T) {
+	srv := newTestServer(t)
+	if _, err := srv.store.UpdateSettings(map[string]interface{}{"requireApiKey": false}); err != nil {
+		t.Fatalf("disable api key auth: %v", err)
+	}
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/rerank" {
+			t.Fatalf("unexpected upstream path: %s", r.URL.Path)
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{"results": []map[string]interface{}{{"index": 0, "score": 0.9}}})
+	}))
+	defer upstream.Close()
+	_, _ = srv.store.CreateProviderConnection(store.ProviderConnection{
+		Provider: "openai", Name: "openai rerank compat", AuthType: "apikey", APIKey: "x", IsActive: true,
+		ProviderSpecificData: map[string]interface{}{"baseUrl": upstream.URL, "apiType": "openai"},
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/rerank", bytes.NewBufferString(`{"query":"q","documents":["a"]}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestAPIV1CompatOllamaChatRoute(t *testing.T) {
+	srv := newTestServer(t)
+	if _, err := srv.store.UpdateSettings(map[string]interface{}{"requireApiKey": false}); err != nil {
+		t.Fatalf("disable api key auth: %v", err)
+	}
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/chat/completions" {
+			t.Fatalf("unexpected upstream path: %s", r.URL.Path)
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{"choices": []map[string]interface{}{{"message": map[string]string{"content": "ok"}}}})
+	}))
+	defer upstream.Close()
+	_, _ = srv.store.CreateProviderConnection(store.ProviderConnection{
+		Provider: "openai", Name: "openai ollama compat", AuthType: "apikey", APIKey: "x", IsActive: true,
+		ProviderSpecificData: map[string]interface{}{"baseUrl": upstream.URL, "apiType": "openai"},
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/api/chat", bytes.NewBufferString(`{"model":"gpt-4o-mini","messages":[{"role":"user","content":"hi"}]}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
+	}
+}
