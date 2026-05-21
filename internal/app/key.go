@@ -214,12 +214,16 @@ func (s *Server) handleProxy(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": err.Error()})
 		return
 	}
+	normalizedPath := r.URL.Path
+	if strings.HasPrefix(normalizedPath, "/api/v1/") {
+		normalizedPath = strings.TrimPrefix(normalizedPath, "/api")
+	}
 	body, err := io.ReadAll(io.LimitReader(r.Body, 16*1024*1024))
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "failed to read body"})
 		return
 	}
-	if r.URL.Path == "/v1/responses/stream" {
+	if normalizedPath == "/v1/responses/stream" {
 		var payload map[string]interface{}
 		if err := json.Unmarshal(body, &payload); err == nil {
 			payload["stream"] = true
@@ -232,7 +236,7 @@ func (s *Server) handleProxy(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "model is disabled", "model": disabledModel})
 		return
 	}
-	resp, err := s.forwarder.Forward(r.Context(), apiKey.ID, r.URL.Path, body)
+	resp, err := s.forwarder.Forward(r.Context(), apiKey.ID, normalizedPath, body)
 	if err != nil {
 		_ = s.store.RecordRequestLog(store.RequestLog{
 			Path:         r.URL.Path,

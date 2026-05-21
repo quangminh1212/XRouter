@@ -127,6 +127,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/v1/chat/completions", s.handleProxy)
 	s.mux.HandleFunc("/api/v1/completions", s.handleProxy)
 	s.mux.HandleFunc("/api/v1/messages", s.handleProxy)
+	s.mux.HandleFunc("/api/v1/messages/count_tokens", s.handleProxy)
 	s.mux.HandleFunc("/api/v1/responses", s.handleProxy)
 	s.mux.HandleFunc("/api/v1/embeddings", s.handleMediaProxy)
 	s.mux.HandleFunc("/api/v1/images/generations", s.handleMediaProxy)
