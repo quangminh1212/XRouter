@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -61,5 +62,17 @@ func TestManagementTunnelsCRUDAndPublicList(t *testing.T) {
 	_ = json.Unmarshal(publicRec2.Body.Bytes(), &publicPayload2)
 	if len(publicPayload2.Tunnels) != 0 {
 		t.Fatalf("expected disabled tunnel hidden from public list, got %#v", publicPayload2)
+	}
+}
+
+func TestManagementTunnelsRejectsOversizedBody(t *testing.T) {
+	srv := newTestServer(t)
+	body := `{"name":"x","provider":"cloudflared","publicUrl":"https://router.example.com","localTarget":"http://127.0.0.1:8080","protocol":"https","enabled":true,"padding":"` + strings.Repeat("a", 1024*1024) + `"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/management/tunnels", bytes.NewBufferString(body))
+	req.Host = "localhost"
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for oversized body, got %d body=%s", rec.Code, rec.Body.String())
 	}
 }
