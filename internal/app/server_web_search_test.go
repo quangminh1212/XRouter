@@ -22,6 +22,7 @@ func TestWebSearchAliasProxy(t *testing.T) {
 		{provider: "serper-search", path: "/search", body: `{"query":"xrouter","max_results":1}`, queryKey: ""},
 		{provider: "exa-search", path: "/search", body: `{"query":"xrouter","max_results":1}`, queryKey: ""},
 		{provider: "google-pse-search", path: "", body: `{"query":"xrouter","max_results":1}`, queryKey: "q"},
+		{provider: "linkup-search", path: "/search", body: `{"query":"xrouter","max_results":1}`, queryKey: ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.provider, func(t *testing.T) {
