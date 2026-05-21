@@ -31,6 +31,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/oauth/callback", s.handleOAuthCallback)
 	s.mux.HandleFunc("/api/mcp/servers", s.handleMCPServers)
 	s.mux.HandleFunc("/api/a2a/agents", s.handleA2AAgents)
+	s.mux.HandleFunc("/api/acp/agents", s.handleACPAgents)
 	s.mux.HandleFunc("/a2a", s.handleA2ARPC)
 	s.mux.HandleFunc("/api/tunnels", s.handleTunnels)
 	s.mux.HandleFunc("/api/cli/config", s.handleCLIConfig)

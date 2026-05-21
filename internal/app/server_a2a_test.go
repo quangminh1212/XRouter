@@ -141,3 +141,40 @@ func TestA2ACanonicalJSONRPCMessageSend(t *testing.T) {
 		t.Fatalf("unexpected payload: %#v", payload)
 	}
 }
+
+func TestACPAgentsCRUDByQueryID(t *testing.T) {
+	srv := newTestServer(t)
+	createReq := httptest.NewRequest(http.MethodPost, "/api/acp/agents", bytes.NewBufferString(`{"name":"ACP Agent","url":"https://a2a.example.com","protocol":"jsonrpc","capabilities":["chat"],"enabled":true}`))
+	createReq.Host = "localhost"
+	createRec := httptest.NewRecorder()
+	srv.ServeHTTP(createRec, createReq)
+	if createRec.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d body=%s", createRec.Code, createRec.Body.String())
+	}
+	var created struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(createRec.Body.Bytes(), &created); err != nil || created.ID == "" {
+		t.Fatalf("decode created agent: id=%q err=%v", created.ID, err)
+	}
+	getReq := httptest.NewRequest(http.MethodGet, "/api/acp/agents", nil)
+	getRec := httptest.NewRecorder()
+	srv.ServeHTTP(getRec, getReq)
+	if getRec.Code != http.StatusOK {
+		t.Fatalf("expected 200 list, got %d body=%s", getRec.Code, getRec.Body.String())
+	}
+	patchReq := httptest.NewRequest(http.MethodPut, "/api/acp/agents?id="+created.ID, bytes.NewBufferString(`{"enabled":false}`))
+	patchReq.Host = "localhost"
+	patchRec := httptest.NewRecorder()
+	srv.ServeHTTP(patchRec, patchReq)
+	if patchRec.Code != http.StatusOK {
+		t.Fatalf("expected 200 update, got %d body=%s", patchRec.Code, patchRec.Body.String())
+	}
+	deleteReq := httptest.NewRequest(http.MethodDelete, "/api/acp/agents?id="+created.ID, nil)
+	deleteReq.Host = "localhost"
+	deleteRec := httptest.NewRecorder()
+	srv.ServeHTTP(deleteRec, deleteReq)
+	if deleteRec.Code != http.StatusOK {
+		t.Fatalf("expected 200 delete, got %d body=%s", deleteRec.Code, deleteRec.Body.String())
+	}
+}
