@@ -68,3 +68,15 @@ func TestAuthFilesUploadListDownloadDelete(t *testing.T) {
 		t.Fatalf("expected 200, got %d body=%s", deleteRec.Code, deleteRec.Body.String())
 	}
 }
+
+func TestAuthFilesRejectsOversizedBody(t *testing.T) {
+	srv := newTestServer(t)
+	content := strings.Repeat("a", 16*1024*1024)
+	req := httptest.NewRequest(http.MethodPost, "/api/auth-files", strings.NewReader(`{"name":"token.json","provider":"vertex","contentB64":"`+content+`"}`))
+	req.Host = "localhost"
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for oversized body, got %d body=%s", rec.Code, rec.Body.String())
+	}
+}

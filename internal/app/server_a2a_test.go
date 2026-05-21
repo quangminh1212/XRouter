@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"xrouter/internal/store"
@@ -247,5 +248,17 @@ func TestCloudAgentTasksCRUDCompat(t *testing.T) {
 	srv.ServeHTTP(missingRec, missingReq)
 	if missingRec.Code != http.StatusNotFound {
 		t.Fatalf("expected 404 after delete, got %d body=%s", missingRec.Code, missingRec.Body.String())
+	}
+}
+
+func TestManagementA2AAgentsRejectsOversizedBody(t *testing.T) {
+	srv := newTestServer(t)
+	body := `{"name":"x","url":"https://a2a.example.com","protocol":"jsonrpc","enabled":true,"padding":"` + strings.Repeat("a", 1024*1024) + `"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/management/a2a-agents", bytes.NewBufferString(body))
+	req.Host = "localhost"
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for oversized body, got %d body=%s", rec.Code, rec.Body.String())
 	}
 }
