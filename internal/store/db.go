@@ -379,6 +379,26 @@ type Settings struct {
 	MaxRetries                 int               `json:"maxRetries,omitempty"`
 	MaxCooldownSeconds         int               `json:"maxCooldownSeconds,omitempty"`
 	DefaultRequestsPerMinute   int               `json:"defaultRequestsPerMinute,omitempty"`
+	AmpCode                    AmpCode           `json:"ampcode,omitempty"`
+}
+
+type AmpCode struct {
+	UpstreamURL                   string            `json:"upstream-url,omitempty"`
+	UpstreamAPIKey                string            `json:"upstream-api-key,omitempty"`
+	UpstreamAPIKeys               []AmpUpstreamKey  `json:"upstream-api-keys,omitempty"`
+	RestrictManagementToLocalhost bool              `json:"restrict-management-to-localhost,omitempty"`
+	ForceModelMappings            bool              `json:"force-model-mappings,omitempty"`
+	ModelMappings                 []AmpModelMapping `json:"model-mappings,omitempty"`
+}
+
+type AmpUpstreamKey struct {
+	UpstreamAPIKey string   `json:"upstream-api-key"`
+	APIKeys        []string `json:"api-keys,omitempty"`
+}
+
+type AmpModelMapping struct {
+	From string `json:"from"`
+	To   string `json:"to"`
 }
 
 type DB struct {
