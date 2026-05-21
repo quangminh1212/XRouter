@@ -532,12 +532,22 @@ func (s *Server) handleManagementComboModelByAlias(w http.ResponseWriter, r *htt
 		writeJSON(w, http.StatusForbidden, map[string]string{"error": "management api is restricted to localhost"})
 		return
 	}
-	alias := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/management/combo-models/"), "/")
+	alias := strings.Trim(strings.TrimPrefix(strings.TrimPrefix(r.URL.Path, "/api/management"), "/api/combos/"), "/")
+	alias = strings.TrimPrefix(alias, "combo-models/")
+	alias = strings.TrimSpace(alias)
 	if alias == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "missing combo model alias"})
 		return
 	}
 	switch r.Method {
+	case http.MethodGet:
+		for _, item := range s.store.ListComboModels() {
+			if item.Alias == alias {
+				writeJSON(w, http.StatusOK, item)
+				return
+			}
+		}
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "combo model not found"})
 	case http.MethodPatch:
 		var patch map[string]interface{}
 		if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {

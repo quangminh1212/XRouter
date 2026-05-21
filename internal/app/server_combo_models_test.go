@@ -79,3 +79,15 @@ func TestComboModelFallbacksToNextTarget(t *testing.T) {
 		t.Fatalf("expected fallback to next combo target, got %#v", payload)
 	}
 }
+
+func TestCombosAliasByAliasRoute(t *testing.T) {
+	srv := newTestServer(t)
+	_, _ = srv.store.CreateComboModel(store.ComboModel{Alias: "combo/coder", Targets: []string{"openai/gpt-4o-mini"}})
+	getReq := httptest.NewRequest(http.MethodGet, "/api/combos/combo%2Fcoder", nil)
+	getReq.Host = "localhost"
+	getRec := httptest.NewRecorder()
+	srv.ServeHTTP(getRec, getReq)
+	if getRec.Code != http.StatusOK {
+		t.Fatalf("expected 200 get, got %d body=%s", getRec.Code, getRec.Body.String())
+	}
+}
