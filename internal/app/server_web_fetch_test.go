@@ -43,3 +43,40 @@ func TestWebFetchSuccessAndBlockLocalhost(t *testing.T) {
 		t.Fatalf("expected 400 for blocked host, got %d body=%s", blockRec.Code, blockRec.Body.String())
 	}
 }
+
+func TestWebFetchBlocksPrivateAndInvalidTargets(t *testing.T) {
+	srv := newTestServer(t)
+	if _, err := srv.store.UpdateSettings(map[string]interface{}{"requireApiKey": false}); err != nil {
+		t.Fatalf("disable api key auth: %v", err)
+	}
+
+	tests := []struct {
+		name  string
+		body  string
+		code  int
+		field string
+		value string
+	}{
+		{name: "loopback ip", body: `{"url":"http://127.0.0.1:8080/"}`, code: http.StatusBadRequest, field: "error", value: "target host is blocked"},
+		{name: "unsupported scheme", body: `{"url":"file:///etc/passwd"}`, code: http.StatusBadRequest, field: "error", value: "invalid url"},
+		{name: "invalid url", body: `{"url":"://bad"}`, code: http.StatusBadRequest, field: "error", value: "invalid url"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, "/v1/web/fetch", bytes.NewBufferString(tt.body))
+			rec := httptest.NewRecorder()
+			srv.ServeHTTP(rec, req)
+			if rec.Code != tt.code {
+				t.Fatalf("expected %d, got %d body=%s", tt.code, rec.Code, rec.Body.String())
+			}
+			var payload map[string]interface{}
+			if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+				t.Fatalf("decode response: %v", err)
+			}
+			if payload[tt.field] != tt.value {
+				t.Fatalf("unexpected payload: %#v", payload)
+			}
+		})
+	}
+}
