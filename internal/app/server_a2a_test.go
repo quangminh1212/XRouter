@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"xrouter/internal/store"
 )
 
 func TestManagementA2AAgentsCRUDAndPublicList(t *testing.T) {
@@ -81,7 +83,9 @@ func TestA2AAgentsAliasByIDRoute(t *testing.T) {
 	if createRec.Code != http.StatusCreated {
 		t.Fatalf("expected 201, got %d body=%s", createRec.Code, createRec.Body.String())
 	}
-	var created struct { ID string `json:"id"` }
+	var created struct {
+		ID string `json:"id"`
+	}
 	if err := json.Unmarshal(createRec.Body.Bytes(), &created); err != nil || created.ID == "" {
 		t.Fatalf("decode created agent: id=%q err=%v", created.ID, err)
 	}
@@ -91,5 +95,49 @@ func TestA2AAgentsAliasByIDRoute(t *testing.T) {
 	srv.ServeHTTP(getRec, getReq)
 	if getRec.Code != http.StatusOK {
 		t.Fatalf("expected 200 get, got %d body=%s", getRec.Code, getRec.Body.String())
+	}
+}
+
+func TestA2ACanonicalJSONRPCListAgents(t *testing.T) {
+	srv := newTestServer(t)
+	_, _ = srv.store.CreateA2AAgent(store.A2AAgent{Name: "Planner", URL: "https://a2a.example.com", Protocol: "jsonrpc", Capabilities: []string{"chat"}, Enabled: true})
+	req := httptest.NewRequest(http.MethodPost, "/a2a", bytes.NewBufferString(`{"jsonrpc":"2.0","id":"req-1","method":"agents/list"}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	var payload struct {
+		JSONRPC string `json:"jsonrpc"`
+		ID      string `json:"id"`
+		Result  struct {
+			Agents []store.A2AAgent `json:"agents"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if payload.JSONRPC != "2.0" || payload.ID != "req-1" || len(payload.Result.Agents) != 1 {
+		t.Fatalf("unexpected payload: %#v", payload)
+	}
+}
+
+func TestA2ACanonicalJSONRPCMessageSend(t *testing.T) {
+	srv := newTestServer(t)
+	req := httptest.NewRequest(http.MethodPost, "/a2a", bytes.NewBufferString(`{"jsonrpc":"2.0","id":2,"method":"message/send","params":{"message":{"role":"user","parts":[{"text":"hi"}]}}}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	var payload map[string]interface{}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	result, _ := payload["result"].(map[string]interface{})
+	if result["status"] != "accepted" {
+		t.Fatalf("unexpected payload: %#v", payload)
 	}
 }

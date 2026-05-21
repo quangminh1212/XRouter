@@ -25,6 +25,43 @@ func (s *Server) handleA2AAgents(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]interface{}{"agents": s.store.ListA2AAgents(false)})
 }
 
+func (s *Server) handleA2ARPC(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	var body struct {
+		JSONRPC string      `json:"jsonrpc"`
+		ID      interface{} `json:"id"`
+		Method  string      `json:"method"`
+		Params  interface{} `json:"params"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"jsonrpc": "2.0",
+			"id":      nil,
+			"error":   map[string]interface{}{"code": -32700, "message": "parse error"},
+		})
+		return
+	}
+	if body.JSONRPC != "2.0" || strings.TrimSpace(body.Method) == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"jsonrpc": "2.0",
+			"id":      body.ID,
+			"error":   map[string]interface{}{"code": -32600, "message": "invalid request"},
+		})
+		return
+	}
+	switch body.Method {
+	case "agents/list", "agent/list":
+		writeJSON(w, http.StatusOK, map[string]interface{}{"jsonrpc": "2.0", "id": body.ID, "result": map[string]interface{}{"agents": s.store.ListA2AAgents(false)}})
+	case "message/send", "message/stream":
+		writeJSON(w, http.StatusOK, map[string]interface{}{"jsonrpc": "2.0", "id": body.ID, "result": map[string]interface{}{"status": "accepted", "method": body.Method}})
+	default:
+		writeJSON(w, http.StatusOK, map[string]interface{}{"jsonrpc": "2.0", "id": body.ID, "error": map[string]interface{}{"code": -32601, "message": "method not found"}})
+	}
+}
+
 func (s *Server) handleTunnels(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
