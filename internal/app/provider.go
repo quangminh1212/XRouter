@@ -64,6 +64,65 @@ func (s *Server) handleProviderCatalog(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (s *Server) handleProviderTestBatch(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	var body struct {
+		ConnectionIDs []string `json:"connectionIds"`
+		IDs           []string `json:"ids"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1*1024*1024)).Decode(&body); err != nil && err != io.EOF {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return
+	}
+	ids := body.ConnectionIDs
+	if len(ids) == 0 {
+		ids = body.IDs
+	}
+	connections := []store.ProviderConnection{}
+	if len(ids) == 0 {
+		connections = s.store.GetAllConnections()
+	} else {
+		seen := map[string]bool{}
+		for _, id := range ids {
+			id = strings.TrimSpace(id)
+			if id == "" || seen[id] {
+				continue
+			}
+			seen[id] = true
+			if conn, ok := s.store.GetConnectionByIDRaw(id); ok {
+				connections = append(connections, conn)
+			}
+		}
+	}
+	results := make([]map[string]interface{}, 0, len(connections))
+	passed := 0
+	failed := 0
+	for _, conn := range connections {
+		probe, err := s.forwarder.ProbeConnection(r.Context(), conn)
+		status := "active"
+		if err != nil || !probe.Healthy {
+			status = "unavailable"
+			failed++
+		} else {
+			passed++
+		}
+		updated, _ := s.store.UpdateConnectionTestStatus(conn.ID, status, probe.Message, probe.StatusCode)
+		updated.APIKey, updated.AccessToken, updated.RefreshToken = "", "", ""
+		item := map[string]interface{}{"id": conn.ID, "provider": conn.Provider, "result": probe, "connection": updated, "success": err == nil && probe.Healthy}
+		if err != nil {
+			item["error"] = err.Error()
+		}
+		results = append(results, item)
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"summary": map[string]int{"total": len(results), "passed": passed, "failed": failed},
+		"results": results,
+	})
+}
+
 func (s *Server) handleProviderMetrics(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})

@@ -21,6 +21,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/settings", s.handleSettings)
 	s.mux.HandleFunc("/api/providers", s.handleProviders)
 	s.mux.HandleFunc("/api/providers/catalog", s.handleProviderCatalog)
+	s.mux.HandleFunc("/api/providers/test-batch", s.handleProviderTestBatch)
 	s.mux.HandleFunc("/api/providers/metrics", s.handleProviderMetrics)
 	s.mux.HandleFunc("/api/providers/cookie-import", s.handleProviderCookieImport)
 	s.mux.HandleFunc("/api/providers/", s.handleProviderByID)

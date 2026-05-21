@@ -307,3 +307,32 @@ func TestProviderModelsEndpointFallback(t *testing.T) {
 		t.Fatalf("expected fallback models, got %#v", payload)
 	}
 }
+
+func TestProviderTestBatchEndpoint(t *testing.T) {
+	srv := newTestServer(t)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]interface{}{"choices": []map[string]interface{}{{"message": map[string]string{"content": "ok"}}}})
+	}))
+	defer upstream.Close()
+	conn, _ := srv.store.CreateProviderConnection(store.ProviderConnection{
+		Provider: "openai", Name: "batch test", AuthType: "apikey", APIKey: "x", IsActive: true,
+		ProviderSpecificData: map[string]interface{}{"baseUrl": upstream.URL, "apiType": "openai"},
+	})
+	body, _ := json.Marshal(map[string]interface{}{"connectionIds": []string{conn.ID}})
+	req := httptest.NewRequest(http.MethodPost, "/api/providers/test-batch", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	var payload struct {
+		Results []map[string]interface{} `json:"results"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(payload.Results) != 1 {
+		t.Fatalf("expected 1 result, got %d: %#v", len(payload.Results), payload)
+	}
+}
