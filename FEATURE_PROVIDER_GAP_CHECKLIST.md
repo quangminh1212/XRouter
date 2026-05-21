@@ -11,9 +11,16 @@ Reference repos:
 
 - XRouter scope has expanded strongly and now includes OAuth/web-cookie onboarding, media/search endpoints, dashboard, MCP/A2A/tunnel, usage streams, and management APIs.
 - XRouter built-in provider catalog currently includes **76** providers (`internal/store/db.go`), with broad OpenAI-compatible/OAuth/web-cookie/search/audio coverage.
-- Provider parity is now **100% for the audited provider set** versus the 3 reference repos. Based on latest heads (`OmniRoute@39526b2`, `9router@9dde485`, `CLIProxyAPI@a726e37`), no high-confidence provider gaps remain.
-- Current high-confidence provider gaps (vs OmniRoute + 9router provider assets): none in the audited provider set.
+- Provider parity is **high for core audited families** (OpenAI/Anthropic/Gemini/Codex/Vertex/xAI + key OpenAI-compatible vendors), but **not full parity** for the entire `public/providers` asset universe in OmniRoute/9router.
+- Current re-check from `public/providers` assets indicates remaining gaps are mostly long-tail adapters/onboarding aliases (for example `alicode`, `searchapi`, `searxng`, `sdwebui`, `ollama`, `youcom`, `volcengine-ark`, `stability-ai`, `topaz`, `tortoise`, `vertex-partner`, `xiaomi-mimo`, `blackbox`, `cursor`, `iflow`, `kilocode`, `openclaw`).
 
+## Re-check Note (2026-05-21)
+
+- Source used for re-check: direct clone latest heads of 3 repos + provider asset files under `public/providers` + local `internal/store/db.go` catalog.
+- Local catalog count: **76** providers.
+- `9router public/providers`: **100** assets, covered by XRouter catalog/alias mapping: **57**, missing: **43**.
+- `OmniRoute public/providers`: **67** assets, covered by XRouter catalog/alias mapping: **16**, missing: **51**.
+- `CLIProxyAPI` documented/core provider families are covered by XRouter at core family level.
 ## Current XRouter Coverage
 
 ### Implemented core management and routing
