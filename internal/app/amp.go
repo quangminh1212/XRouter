@@ -38,7 +38,7 @@ func (s *Server) handleAmpUpstreamURL(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
 		writeJSON(w, http.StatusOK, map[string]string{"upstream-url": s.store.GetSettings().AmpCode.UpstreamURL})
-	case http.MethodPut:
+	case http.MethodPut, http.MethodPatch:
 		var body struct {
 			Value string `json:"value"`
 		}
@@ -76,7 +76,7 @@ func (s *Server) handleAmpUpstreamAPIKey(w http.ResponseWriter, r *http.Request)
 	switch r.Method {
 	case http.MethodGet:
 		writeJSON(w, http.StatusOK, map[string]interface{}{"upstream-api-key": s.store.GetSettings().AmpCode.UpstreamAPIKey})
-	case http.MethodPut:
+	case http.MethodPut, http.MethodPatch:
 		var body struct {
 			Value string `json:"value"`
 		}
@@ -217,7 +217,7 @@ func (s *Server) handleAmpRestrictManagementToLocalhost(w http.ResponseWriter, r
 	switch r.Method {
 	case http.MethodGet:
 		writeJSON(w, http.StatusOK, map[string]bool{"restrict-management-to-localhost": s.store.GetSettings().AmpCode.RestrictManagementToLocalhost})
-	case http.MethodPut:
+	case http.MethodPut, http.MethodPatch:
 		var body struct {
 			Value bool `json:"value"`
 		}
@@ -246,7 +246,7 @@ func (s *Server) handleAmpForceModelMappings(w http.ResponseWriter, r *http.Requ
 	switch r.Method {
 	case http.MethodGet:
 		writeJSON(w, http.StatusOK, map[string]bool{"force-model-mappings": s.store.GetSettings().AmpCode.ForceModelMappings})
-	case http.MethodPut:
+	case http.MethodPut, http.MethodPatch:
 		var body struct {
 			Value bool `json:"value"`
 		}

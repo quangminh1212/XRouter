@@ -209,3 +209,30 @@ func TestV0ManagementDebugRequestLogAndUsageQueueCompat(t *testing.T) {
 		t.Fatalf("unexpected usage-queue payload: %#v", payload)
 	}
 }
+
+func TestV0ManagementAmpCodePatchCompatRoutes(t *testing.T) {
+	srv := newTestServer(t)
+	for _, tc := range []struct {
+		path string
+		body string
+		want string
+	}{
+		{path: "/v0/management/ampcode/upstream-url", body: `{"value":"https://patch.example.com"}`, want: `patch.example.com`},
+		{path: "/v0/management/ampcode/upstream-api-key", body: `{"value":"patch-key"}`, want: `patch-key`},
+		{path: "/v0/management/ampcode/restrict-management-to-localhost", body: `{"value":true}`, want: `true`},
+		{path: "/v0/management/ampcode/force-model-mappings", body: `{"value":true}`, want: `true`},
+	} {
+		t.Run(tc.path, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPatch, tc.path, bytes.NewBufferString(tc.body))
+			req.Host = "localhost"
+			rec := httptest.NewRecorder()
+			srv.ServeHTTP(rec, req)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("expected 200 patch, got %d body=%s", rec.Code, rec.Body.String())
+			}
+			if !strings.Contains(rec.Body.String(), tc.want) {
+				t.Fatalf("expected response to contain %q, got %s", tc.want, rec.Body.String())
+			}
+		})
+	}
+}
