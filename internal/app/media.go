@@ -99,7 +99,11 @@ func (s *Server) handleGeminiAction(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": err.Error()})
 		return
 	}
-	trimmed := strings.TrimPrefix(r.URL.Path, "/v1beta/models/")
+	path := r.URL.Path
+	if strings.HasPrefix(path, "/api/v1beta/models/") {
+		path = strings.TrimPrefix(path, "/api")
+	}
+	trimmed := strings.TrimPrefix(path, "/v1beta/models/")
 	parts := strings.SplitN(trimmed, ":", 2)
 	if len(parts) != 2 || strings.TrimSpace(parts[0]) == "" || strings.TrimSpace(parts[1]) == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid gemini action path"})
