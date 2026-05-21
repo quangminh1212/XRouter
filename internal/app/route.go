@@ -141,6 +141,8 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/v1/web/search", s.handleSearch)
 	s.mux.HandleFunc("/api/v1/web/fetch", s.handleWebFetch)
 	s.mux.HandleFunc("/api/v1/models", s.handleModels)
+	s.mux.HandleFunc("/api/v1/agents/tasks", s.handleCloudAgentTasks)
+	s.mux.HandleFunc("/api/v1/agents/tasks/", s.handleCloudAgentTaskByID)
 	s.mux.HandleFunc("/api/v1/ws", s.handleProxy)
 	s.mux.HandleFunc("/api/v1beta/models", s.handleModels)
 	s.mux.HandleFunc("/api/v1beta/models/", s.handleGeminiAction)

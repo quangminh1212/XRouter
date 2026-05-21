@@ -14,14 +14,16 @@ import (
 )
 
 type Server struct {
-	store     *store.Store
-	forwarder *proxy.Forwarder
-	mux       *http.ServeMux
-	startedAt time.Time
-	limits    map[string]*rateBucket
-	limitMu   sync.Mutex
-	oauthMu   sync.Mutex
-	oauth     map[string]oauthSession
+	store      *store.Store
+	forwarder  *proxy.Forwarder
+	mux        *http.ServeMux
+	startedAt  time.Time
+	limits     map[string]*rateBucket
+	limitMu    sync.Mutex
+	oauthMu    sync.Mutex
+	oauth      map[string]oauthSession
+	cloudMu    sync.Mutex
+	cloudTasks map[string]map[string]interface{}
 }
 
 type rateBucket struct {
@@ -51,7 +53,7 @@ func NewServer() (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	s := &Server{store: st, forwarder: proxy.NewForwarder(st), mux: http.NewServeMux(), startedAt: time.Now(), limits: map[string]*rateBucket{}, oauth: map[string]oauthSession{}}
+	s := &Server{store: st, forwarder: proxy.NewForwarder(st), mux: http.NewServeMux(), startedAt: time.Now(), limits: map[string]*rateBucket{}, oauth: map[string]oauthSession{}, cloudTasks: map[string]map[string]interface{}{}}
 	s.routes()
 	go s.backgroundReload()
 	return s, nil

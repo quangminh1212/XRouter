@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"xrouter/internal/store"
 )
@@ -23,6 +24,88 @@ func (s *Server) handleA2AAgents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{"agents": s.store.ListA2AAgents(false)})
+}
+
+func (s *Server) handleCloudAgentTasks(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		s.cloudMu.Lock()
+		tasks := make([]map[string]interface{}, 0, len(s.cloudTasks))
+		for _, task := range s.cloudTasks {
+			tasks = append(tasks, task)
+		}
+		s.cloudMu.Unlock()
+		writeJSON(w, http.StatusOK, map[string]interface{}{"tasks": tasks})
+	case http.MethodPost:
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+			return
+		}
+		id := fmt.Sprintf("task_%d", time.Now().UnixNano())
+		body["id"] = id
+		body["status"] = "pending"
+		body["createdAt"] = time.Now().UTC().Format(time.RFC3339)
+		s.cloudMu.Lock()
+		s.cloudTasks[id] = body
+		s.cloudMu.Unlock()
+		writeJSON(w, http.StatusCreated, body)
+	default:
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+	}
+}
+
+func (s *Server) handleCloudAgentTaskByID(w http.ResponseWriter, r *http.Request) {
+	id := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/v1/agents/tasks/"), "/")
+	if id == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "missing task id"})
+		return
+	}
+	switch r.Method {
+	case http.MethodGet:
+		s.cloudMu.Lock()
+		task, ok := s.cloudTasks[id]
+		s.cloudMu.Unlock()
+		if !ok {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "task not found"})
+			return
+		}
+		writeJSON(w, http.StatusOK, task)
+	case http.MethodPatch, http.MethodPut:
+		var patch map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+			return
+		}
+		s.cloudMu.Lock()
+		task, ok := s.cloudTasks[id]
+		if ok {
+			for k, v := range patch {
+				task[k] = v
+			}
+			s.cloudTasks[id] = task
+		}
+		s.cloudMu.Unlock()
+		if !ok {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "task not found"})
+			return
+		}
+		writeJSON(w, http.StatusOK, task)
+	case http.MethodDelete:
+		s.cloudMu.Lock()
+		_, ok := s.cloudTasks[id]
+		if ok {
+			delete(s.cloudTasks, id)
+		}
+		s.cloudMu.Unlock()
+		if !ok {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "task not found"})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]bool{"success": true})
+	default:
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+	}
 }
 
 func (s *Server) handleACPAgents(w http.ResponseWriter, r *http.Request) {

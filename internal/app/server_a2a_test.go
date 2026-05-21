@@ -178,3 +178,74 @@ func TestACPAgentsCRUDByQueryID(t *testing.T) {
 		t.Fatalf("expected 200 delete, got %d body=%s", deleteRec.Code, deleteRec.Body.String())
 	}
 }
+
+func TestCloudAgentTasksCRUDCompat(t *testing.T) {
+	srv := newTestServer(t)
+
+	createReq := httptest.NewRequest(http.MethodPost, "/api/v1/agents/tasks", bytes.NewBufferString(`{"prompt":"build plan","agent":"planner"}`))
+	createRec := httptest.NewRecorder()
+	srv.ServeHTTP(createRec, createReq)
+	if createRec.Code != http.StatusCreated {
+		t.Fatalf("expected 201 create, got %d body=%s", createRec.Code, createRec.Body.String())
+	}
+	var created struct {
+		ID     string `json:"id"`
+		Status string `json:"status"`
+	}
+	if err := json.Unmarshal(createRec.Body.Bytes(), &created); err != nil {
+		t.Fatalf("decode created task: %v", err)
+	}
+	if created.ID == "" || created.Status != "pending" {
+		t.Fatalf("unexpected created task: %#v", created)
+	}
+
+	listReq := httptest.NewRequest(http.MethodGet, "/api/v1/agents/tasks", nil)
+	listRec := httptest.NewRecorder()
+	srv.ServeHTTP(listRec, listReq)
+	if listRec.Code != http.StatusOK {
+		t.Fatalf("expected 200 list, got %d body=%s", listRec.Code, listRec.Body.String())
+	}
+	var listed struct {
+		Tasks []map[string]interface{} `json:"tasks"`
+	}
+	if err := json.Unmarshal(listRec.Body.Bytes(), &listed); err != nil {
+		t.Fatalf("decode listed tasks: %v", err)
+	}
+	if len(listed.Tasks) != 1 || listed.Tasks[0]["id"] != created.ID {
+		t.Fatalf("unexpected listed tasks: %#v", listed)
+	}
+
+	getReq := httptest.NewRequest(http.MethodGet, "/api/v1/agents/tasks/"+created.ID, nil)
+	getRec := httptest.NewRecorder()
+	srv.ServeHTTP(getRec, getReq)
+	if getRec.Code != http.StatusOK {
+		t.Fatalf("expected 200 get, got %d body=%s", getRec.Code, getRec.Body.String())
+	}
+
+	patchReq := httptest.NewRequest(http.MethodPatch, "/api/v1/agents/tasks/"+created.ID, bytes.NewBufferString(`{"status":"done"}`))
+	patchRec := httptest.NewRecorder()
+	srv.ServeHTTP(patchRec, patchReq)
+	if patchRec.Code != http.StatusOK {
+		t.Fatalf("expected 200 patch, got %d body=%s", patchRec.Code, patchRec.Body.String())
+	}
+	var patched struct {
+		Status string `json:"status"`
+	}
+	if err := json.Unmarshal(patchRec.Body.Bytes(), &patched); err != nil || patched.Status != "done" {
+		t.Fatalf("unexpected patched task: status=%q err=%v", patched.Status, err)
+	}
+
+	deleteReq := httptest.NewRequest(http.MethodDelete, "/api/v1/agents/tasks/"+created.ID, nil)
+	deleteRec := httptest.NewRecorder()
+	srv.ServeHTTP(deleteRec, deleteReq)
+	if deleteRec.Code != http.StatusOK {
+		t.Fatalf("expected 200 delete, got %d body=%s", deleteRec.Code, deleteRec.Body.String())
+	}
+
+	missingReq := httptest.NewRequest(http.MethodGet, "/api/v1/agents/tasks/"+created.ID, nil)
+	missingRec := httptest.NewRecorder()
+	srv.ServeHTTP(missingRec, missingReq)
+	if missingRec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 after delete, got %d body=%s", missingRec.Code, missingRec.Body.String())
+	}
+}
