@@ -17,19 +17,46 @@ func (s *Server) handleAudioVoices(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
 		return
 	}
-	voices := []map[string]string{
-		{"id": "alloy", "provider": "openai-tts", "language": "multilingual"},
-		{"id": "ash", "provider": "openai-tts", "language": "multilingual"},
-		{"id": "ballad", "provider": "openai-tts", "language": "multilingual"},
-		{"id": "coral", "provider": "openai-tts", "language": "multilingual"},
-		{"id": "echo", "provider": "openai-tts", "language": "multilingual"},
-		{"id": "fable", "provider": "openai-tts", "language": "multilingual"},
-		{"id": "nova", "provider": "openai-tts", "language": "multilingual"},
-		{"id": "onyx", "provider": "openai-tts", "language": "multilingual"},
-		{"id": "sage", "provider": "openai-tts", "language": "multilingual"},
-		{"id": "shimmer", "provider": "openai-tts", "language": "multilingual"},
+	provider := strings.TrimSpace(r.URL.Query().Get("provider"))
+	if provider == "" {
+		provider = providerFromVoicePath(r.URL.Path)
 	}
-	writeJSON(w, http.StatusOK, map[string]interface{}{"voices": voices})
+	if provider == "" {
+		provider = "openai-tts"
+	}
+	voices := []map[string]string{
+		{"id": "alloy", "name": "alloy", "provider": provider, "language": "multilingual", "lang": "multi", "model": provider + "/alloy"},
+		{"id": "ash", "name": "ash", "provider": provider, "language": "multilingual", "lang": "multi", "model": provider + "/ash"},
+		{"id": "ballad", "name": "ballad", "provider": provider, "language": "multilingual", "lang": "multi", "model": provider + "/ballad"},
+		{"id": "coral", "name": "coral", "provider": provider, "language": "multilingual", "lang": "multi", "model": provider + "/coral"},
+		{"id": "echo", "name": "echo", "provider": provider, "language": "multilingual", "lang": "multi", "model": provider + "/echo"},
+		{"id": "fable", "name": "fable", "provider": provider, "language": "multilingual", "lang": "multi", "model": provider + "/fable"},
+		{"id": "nova", "name": "nova", "provider": provider, "language": "multilingual", "lang": "multi", "model": provider + "/nova"},
+		{"id": "onyx", "name": "onyx", "provider": provider, "language": "multilingual", "lang": "multi", "model": provider + "/onyx"},
+		{"id": "sage", "name": "sage", "provider": provider, "language": "multilingual", "lang": "multi", "model": provider + "/sage"},
+		{"id": "shimmer", "name": "shimmer", "provider": provider, "language": "multilingual", "lang": "multi", "model": provider + "/shimmer"},
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"voices":    voices,
+		"object":    "list",
+		"data":      voices,
+		"languages": []string{"multi"},
+		"byLang": map[string]interface{}{
+			"multi": map[string]interface{}{"voices": voices},
+		},
+	})
+}
+
+func providerFromVoicePath(path string) string {
+	trimmed := strings.Trim(strings.TrimPrefix(path, "/api/media-providers/tts/"), "/")
+	if trimmed == "" || trimmed == "voices" {
+		return ""
+	}
+	parts := strings.Split(trimmed, "/")
+	if len(parts) >= 2 && parts[1] == "voices" {
+		return strings.TrimSpace(parts[0])
+	}
+	return ""
 }
 
 func geminiContentsToMessages(contents []map[string]interface{}) []map[string]interface{} {
