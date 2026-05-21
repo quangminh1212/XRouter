@@ -137,6 +137,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/v1/web/fetch", s.handleWebFetch)
 	s.mux.HandleFunc("/api/v1/models", s.handleModels)
 	s.mux.HandleFunc("/api/v1/ws", s.handleProxy)
+	s.mux.HandleFunc("/api/v1beta/models", s.handleModels)
 	s.mux.HandleFunc("/api/v1beta/models/", s.handleGeminiAction)
 	s.mux.HandleFunc("/api/provider/", s.handleProviderScopedProxy)
 	s.mux.HandleFunc("/anthropic/callback", s.handleOAuthCallback)
