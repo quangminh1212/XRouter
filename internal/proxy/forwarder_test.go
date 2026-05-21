@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"bytes"
+	"encoding/json"
 	"net/http"
 	"strings"
 	"testing"
@@ -73,6 +74,44 @@ func TestResolveEndpointCustomProviderRequiresBaseURL(t *testing.T) {
 	_, _, err := resolveEndpoint(store.ProviderConnection{Provider: "custom"}, "custom/model", "/v1/chat/completions")
 	if err == nil {
 		t.Fatalf("expected missing baseUrl error")
+	}
+}
+
+func TestNormalizeOpenAIToGeminiBodySystemInstruction(t *testing.T) {
+	body := map[string]interface{}{
+		"model": "gemini-compatible/gemini-1.5-flash",
+		"messages": []interface{}{
+			map[string]interface{}{"role": "system", "content": "follow policy"},
+			map[string]interface{}{"role": "user", "content": "hello"},
+		},
+	}
+	raw := normalizeOpenAIToGeminiBody(body, "gemini-compatible")
+	var out map[string]interface{}
+	if err := json.Unmarshal(raw, &out); err != nil {
+		t.Fatalf("decode transformed body: %v", err)
+	}
+	if _, ok := out["model"]; ok {
+		t.Fatalf("gemini body should not keep model field: %#v", out)
+	}
+	systemInstruction, ok := out["systemInstruction"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("missing systemInstruction: %#v", out)
+	}
+	parts, ok := systemInstruction["parts"].([]interface{})
+	if !ok || len(parts) != 1 {
+		t.Fatalf("unexpected systemInstruction parts: %#v", systemInstruction)
+	}
+	part, _ := parts[0].(map[string]interface{})
+	if strings.TrimSpace(part["text"].(string)) != "follow policy" {
+		t.Fatalf("unexpected systemInstruction text: %#v", part)
+	}
+	contents, ok := out["contents"].([]interface{})
+	if !ok || len(contents) != 1 {
+		t.Fatalf("unexpected contents: %#v", out["contents"])
+	}
+	content, _ := contents[0].(map[string]interface{})
+	if content["role"] != "user" {
+		t.Fatalf("unexpected content role: %#v", content)
 	}
 }
 

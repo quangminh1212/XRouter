@@ -446,16 +446,20 @@ func normalizeOpenAIToGeminiBody(body map[string]interface{}, providerHint strin
 	out := map[string]interface{}{}
 	if messages, ok := body["messages"].([]interface{}); ok {
 		contents := make([]map[string]interface{}, 0, len(messages))
+		systemParts := make([]map[string]string, 0)
 		for _, raw := range messages {
 			item, _ := raw.(map[string]interface{})
+			roleRaw := ""
+			if v, ok := item["role"].(string); ok {
+				roleRaw = strings.ToLower(strings.TrimSpace(v))
+			}
 			role := "user"
-			if v, ok := item["role"].(string); ok && strings.TrimSpace(v) != "" {
-				switch strings.ToLower(strings.TrimSpace(v)) {
-				case "assistant", "model":
-					role = "model"
-				default:
-					role = "user"
-				}
+			isSystem := false
+			switch roleRaw {
+			case "assistant", "model":
+				role = "model"
+			case "system", "developer":
+				isSystem = true
 			}
 			parts := make([]map[string]string, 0, 1)
 			switch content := item["content"].(type) {
@@ -474,9 +478,21 @@ func normalizeOpenAIToGeminiBody(body map[string]interface{}, providerHint strin
 			if len(parts) == 0 {
 				continue
 			}
+			if isSystem {
+				systemParts = append(systemParts, parts...)
+				continue
+			}
 			contents = append(contents, map[string]interface{}{"role": role, "parts": parts})
 		}
 		out["contents"] = contents
+		if len(systemParts) > 0 {
+			out["systemInstruction"] = map[string]interface{}{"role": "user", "parts": systemParts}
+		}
+	}
+	if v, ok := body["system"].(string); ok && strings.TrimSpace(v) != "" {
+		if _, exists := out["systemInstruction"]; !exists {
+			out["systemInstruction"] = map[string]interface{}{"role": "user", "parts": []map[string]string{{"text": v}}}
+		}
 	}
 	cfg := map[string]interface{}{}
 	if v, ok := body["max_tokens"]; ok {
