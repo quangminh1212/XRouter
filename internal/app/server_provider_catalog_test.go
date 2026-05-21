@@ -303,3 +303,107 @@ func TestProviderCatalogIncludesLongTailParityProviders(t *testing.T) {
 		}
 	}
 }
+
+func TestProviderCatalogIncludesAssetAliasProviders(t *testing.T) {
+	srv := newTestServer(t)
+	req := httptest.NewRequest(http.MethodGet, "/api/providers/catalog", nil)
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	var payload struct {
+		Providers []store.ProviderCatalogEntry `json:"providers"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	want := map[string]bool{
+		"anthropic-m":  false,
+		"blackbox-web": false,
+		"brave":        false,
+		"cliproxyapi":  false,
+		"command-code": false,
+		"copilot":      false,
+		"google-pse":   false,
+		"kimi-coding":  false,
+		"oai-cc":       false,
+		"oai-r":        false,
+	}
+	for _, provider := range payload.Providers {
+		if _, ok := want[provider.Provider]; ok {
+			want[provider.Provider] = true
+		}
+	}
+	for name, found := range want {
+		if !found {
+			t.Fatalf("missing asset alias provider %s in catalog", name)
+		}
+	}
+}
+
+func TestProviderCatalogIncludesRemainingAssetNames(t *testing.T) {
+	srv := newTestServer(t)
+	req := httptest.NewRequest(http.MethodGet, "/api/providers/catalog", nil)
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	var payload struct {
+		Providers []store.ProviderCatalogEntry `json:"providers"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	want := map[string]bool{
+		"agentrouter":         false,
+		"aimlapi":             false,
+		"apikey":              false,
+		"bazaarlink":          false,
+		"cline":               false,
+		"docker-model-runner": false,
+		"empower":             false,
+		"gigachat":            false,
+		"gitlab":              false,
+		"gitlab-duo":          false,
+		"heroku":              false,
+		"ironclaw":            false,
+		"kie":                 false,
+		"kilo-gateway":        false,
+		"lemonade":            false,
+		"llamafile":           false,
+		"llamagate":           false,
+		"maritalk":            false,
+		"modal":               false,
+		"nanobot":             false,
+		"nanogpt":             false,
+		"nlpcloud":            false,
+		"nscale":              false,
+		"oauth":               false,
+		"oci":                 false,
+		"opencode-dark":       false,
+		"opencode-light":      false,
+		"ovhcloud":            false,
+		"piapi":               false,
+		"picoclaw":            false,
+		"predibase":           false,
+		"puter":               false,
+		"qianfan":             false,
+		"sap":                 false,
+		"scaleway":            false,
+		"synthetic":           false,
+		"wandb":               false,
+		"zeroclaw":            false,
+	}
+	for _, provider := range payload.Providers {
+		if _, ok := want[provider.Provider]; ok {
+			want[provider.Provider] = true
+		}
+	}
+	for name, found := range want {
+		if !found {
+			t.Fatalf("missing remaining asset provider %s in catalog", name)
+		}
+	}
+}
