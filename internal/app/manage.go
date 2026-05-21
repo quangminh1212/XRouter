@@ -1300,12 +1300,11 @@ func (s *Server) handleManagementBoolValue(w http.ResponseWriter, r *http.Reques
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 			return
 		}
-		settings, err := s.store.UpdateSettings(map[string]interface{}{patchKey: body.Value})
+		_, err := s.store.UpdateSettings(map[string]interface{}{patchKey: body.Value})
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 			return
 		}
-		_ = settings
 		writeJSON(w, http.StatusOK, map[string]bool{key: body.Value})
 	default:
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
