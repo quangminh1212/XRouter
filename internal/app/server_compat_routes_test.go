@@ -328,3 +328,53 @@ func TestV0ManagementProviderKeyAliasCompatRoutes(t *testing.T) {
 		t.Fatalf("expected one deleted key, got %s", deleteRec.Body.String())
 	}
 }
+
+func TestV0ManagementOAuthAliasCompatRoutes(t *testing.T) {
+	srv := newTestServer(t)
+
+	excludedReq := httptest.NewRequest(http.MethodPatch, "/v0/management/oauth-excluded-models", bytes.NewBufferString(`{"provider":"codex","models":["gpt-4o"]}`))
+	excludedReq.Host = "localhost"
+	excludedRec := httptest.NewRecorder()
+	srv.ServeHTTP(excludedRec, excludedReq)
+	if excludedRec.Code != http.StatusOK {
+		t.Fatalf("expected 200 excluded models, got %d body=%s", excludedRec.Code, excludedRec.Body.String())
+	}
+	if !strings.Contains(excludedRec.Body.String(), "gpt-4o") {
+		t.Fatalf("unexpected excluded models response: %s", excludedRec.Body.String())
+	}
+
+	aliasReq := httptest.NewRequest(http.MethodPatch, "/v0/management/oauth-model-alias", bytes.NewBufferString(`{"channel":"codex","aliases":[{"from":"gpt-4","to":"gpt-4o"}]}`))
+	aliasReq.Host = "localhost"
+	aliasRec := httptest.NewRecorder()
+	srv.ServeHTTP(aliasRec, aliasReq)
+	if aliasRec.Code != http.StatusOK {
+		t.Fatalf("expected 200 oauth model alias, got %d body=%s", aliasRec.Code, aliasRec.Body.String())
+	}
+	if !strings.Contains(aliasRec.Body.String(), "gpt-4o") {
+		t.Fatalf("unexpected oauth model alias response: %s", aliasRec.Body.String())
+	}
+
+	for _, path := range []string{"/v0/management/codex-auth-url", "/v0/management/gemini-cli-auth-url", "/v0/management/xai-auth-url"} {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req.Host = "localhost"
+		rec := httptest.NewRecorder()
+		srv.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200 %s, got %d body=%s", path, rec.Code, rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), "provider") {
+			t.Fatalf("unexpected auth-url response for %s: %s", path, rec.Body.String())
+		}
+	}
+
+	statusReq := httptest.NewRequest(http.MethodGet, "/v0/management/get-auth-status", nil)
+	statusReq.Host = "localhost"
+	statusRec := httptest.NewRecorder()
+	srv.ServeHTTP(statusRec, statusReq)
+	if statusRec.Code != http.StatusOK {
+		t.Fatalf("expected 200 auth status, got %d body=%s", statusRec.Code, statusRec.Body.String())
+	}
+	if !strings.Contains(statusRec.Body.String(), "authStatus") {
+		t.Fatalf("unexpected auth status response: %s", statusRec.Body.String())
+	}
+}

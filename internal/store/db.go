@@ -363,26 +363,28 @@ type DailySummary struct {
 }
 
 type Settings struct {
-	RequireAPIKey              bool              `json:"requireApiKey"`
-	RequireLogin               bool              `json:"requireLogin"`
-	StickyRoundRobinLimit      int               `json:"stickyRoundRobinLimit"`
-	ComboStrategy              string            `json:"comboStrategy"`
-	ComboStickyRoundRobinLimit int               `json:"comboStickyRoundRobinLimit"`
-	OutboundProxyEnabled       bool              `json:"outboundProxyEnabled"`
-	OutboundProxyURL           string            `json:"outboundProxyUrl"`
-	OutboundNoProxy            string            `json:"outboundNoProxy"`
-	ObservabilityEnabled       bool              `json:"observabilityEnabled"`
-	ObservabilityMaxRecords    int               `json:"observabilityMaxRecords"`
-	ForcedModelMappings        map[string]string `json:"forcedModelMappings,omitempty"`
-	DisabledModels             []string          `json:"disabledModels,omitempty"`
-	ModelAvailability          map[string]string `json:"modelAvailability,omitempty"`
-	MaxRetries                 int               `json:"maxRetries,omitempty"`
-	MaxCooldownSeconds         int               `json:"maxCooldownSeconds,omitempty"`
-	DefaultRequestsPerMinute   int               `json:"defaultRequestsPerMinute,omitempty"`
-	AmpCode                    AmpCode           `json:"ampcode,omitempty"`
-	Debug                      bool              `json:"debug,omitempty"`
-	RequestLog                 bool              `json:"requestLog,omitempty"`
-	ForceModelPrefix           bool              `json:"forceModelPrefix,omitempty"`
+	RequireAPIKey              bool                                `json:"requireApiKey"`
+	RequireLogin               bool                                `json:"requireLogin"`
+	StickyRoundRobinLimit      int                                 `json:"stickyRoundRobinLimit"`
+	ComboStrategy              string                              `json:"comboStrategy"`
+	ComboStickyRoundRobinLimit int                                 `json:"comboStickyRoundRobinLimit"`
+	OutboundProxyEnabled       bool                                `json:"outboundProxyEnabled"`
+	OutboundProxyURL           string                              `json:"outboundProxyUrl"`
+	OutboundNoProxy            string                              `json:"outboundNoProxy"`
+	ObservabilityEnabled       bool                                `json:"observabilityEnabled"`
+	ObservabilityMaxRecords    int                                 `json:"observabilityMaxRecords"`
+	ForcedModelMappings        map[string]string                   `json:"forcedModelMappings,omitempty"`
+	DisabledModels             []string                            `json:"disabledModels,omitempty"`
+	ModelAvailability          map[string]string                   `json:"modelAvailability,omitempty"`
+	MaxRetries                 int                                 `json:"maxRetries,omitempty"`
+	MaxCooldownSeconds         int                                 `json:"maxCooldownSeconds,omitempty"`
+	DefaultRequestsPerMinute   int                                 `json:"defaultRequestsPerMinute,omitempty"`
+	AmpCode                    AmpCode                             `json:"ampcode,omitempty"`
+	Debug                      bool                                `json:"debug,omitempty"`
+	RequestLog                 bool                                `json:"requestLog,omitempty"`
+	ForceModelPrefix           bool                                `json:"forceModelPrefix,omitempty"`
+	OAuthExcludedModels        map[string][]string                 `json:"oauthExcludedModels,omitempty"`
+	OAuthModelAlias            map[string][]map[string]interface{} `json:"oauthModelAlias,omitempty"`
 }
 
 type AmpCode struct {
