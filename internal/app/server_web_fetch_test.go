@@ -34,6 +34,10 @@ func TestWebFetchSuccessAndBlockLocalhost(t *testing.T) {
 	if okPayload["status"] != float64(200) {
 		t.Fatalf("unexpected fetch status payload: %#v", okPayload)
 	}
+	logs := srv.store.GetRequestLogs(1)
+	if len(logs) != 1 || logs[0].Path != "/v1/web/fetch" || logs[0].StatusCode != http.StatusOK {
+		t.Fatalf("unexpected fetch request log: %#v", logs)
+	}
 	t.Setenv("XR_ALLOW_PRIVATE_FETCH", "")
 
 	blockReq := httptest.NewRequest(http.MethodPost, "/v1/web/fetch", bytes.NewBufferString(`{"url":"http://localhost:8080/"}`))
