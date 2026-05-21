@@ -72,6 +72,8 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/combos/", s.handleManagementComboModelByAlias)
 	s.mux.HandleFunc("/api/provider-nodes", s.handleManagementProviderNodes)
 	s.mux.HandleFunc("/api/provider-nodes/", s.handleManagementProviderNodeByID)
+	s.mux.HandleFunc("/api/proxy-pools", s.handleManagementProxyPools)
+	s.mux.HandleFunc("/api/proxy-pools/", s.handleManagementProxyPoolByID)
 	s.mux.HandleFunc("/api/rate-limits", s.handleRateLimitsAlias)
 	s.mux.HandleFunc("/api/cache/stats", s.handleCacheStatsAlias)
 	s.mux.HandleFunc("/api/pricing", s.handlePricingAlias)

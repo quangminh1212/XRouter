@@ -388,7 +388,9 @@ func (s *Server) handleManagementProxyPoolByID(w http.ResponseWriter, r *http.Re
 		writeJSON(w, http.StatusForbidden, map[string]string{"error": "management api is restricted to localhost"})
 		return
 	}
-	id := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/management/proxy-pools/"), "/")
+	id := strings.Trim(strings.TrimPrefix(strings.TrimPrefix(r.URL.Path, "/api/management"), "/api/proxy-pools/"), "/")
+	id = strings.TrimPrefix(id, "proxy-pools/")
+	id = strings.TrimSpace(id)
 	if id == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "missing proxy pool id"})
 		return
