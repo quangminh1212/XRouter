@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -65,5 +66,17 @@ func TestManagementMCPServersCRUDAndPublicList(t *testing.T) {
 	_ = json.Unmarshal(publicRec2.Body.Bytes(), &publicPayload2)
 	if len(publicPayload2.Servers) != 0 {
 		t.Fatalf("expected disabled server hidden from public list, got %#v", publicPayload2)
+	}
+}
+
+func TestManagementMCPServersRejectsOversizedBody(t *testing.T) {
+	srv := newTestServer(t)
+	body := `{"name":"x","transport":"http","url":"https://mcp.example.com","enabled":true,"padding":"` + strings.Repeat("a", 1024*1024) + `"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/management/mcp-servers", bytes.NewBufferString(body))
+	req.Host = "localhost"
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for oversized body, got %d body=%s", rec.Code, rec.Body.String())
 	}
 }
