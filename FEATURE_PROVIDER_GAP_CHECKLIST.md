@@ -10,8 +10,8 @@ Reference repos:
 ## Summary
 
 - XRouter scope has expanded strongly and now includes OAuth/web-cookie onboarding, media/search endpoints, dashboard, MCP/A2A/tunnel, usage streams, and management APIs.
-- XRouter built-in provider catalog currently includes **65** providers (`internal/store/db.go`), with broad OpenAI-compatible/OAuth/web-cookie/search/audio coverage.
-- Full parity is still **not 100%** versus the 3 reference repos. Based on latest heads (`OmniRoute@39526b2`, `9router@9dde485`, `CLIProxyAPI@a726e37`), key provider/service gaps remain.
+- XRouter built-in provider catalog currently includes **76** providers (`internal/store/db.go`), with broad OpenAI-compatible/OAuth/web-cookie/search/audio coverage.
+- Provider parity is now **100% for the audited provider set** versus the 3 reference repos. Based on latest heads (`OmniRoute@39526b2`, `9router@9dde485`, `CLIProxyAPI@a726e37`), no high-confidence provider gaps remain.
 - Current high-confidence provider gaps (vs OmniRoute + 9router provider assets): none in the audited provider set.
 
 ## Current XRouter Coverage
@@ -599,6 +599,7 @@ Legend:
   - built-in routing exists directly (`openai`, `anthropic`, `openrouter`), or
   - the current code can already route a generic compatible provider class without adding a whole new provider-specific auth flow.
 - `NO` means XRouter still needs at least one of: provider adapter logic, auth onboarding flow, model normalization, dedicated endpoint support, or management UX/API.
+
 
 
 
