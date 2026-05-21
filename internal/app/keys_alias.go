@@ -3,6 +3,7 @@ package app
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 
@@ -108,7 +109,7 @@ func providerKeyAliasPayload(conn store.ProviderConnection) map[string]interface
 
 func decodeProviderKeyAliasValues(r *http.Request) ([]map[string]interface{}, error) {
 	var body map[string]interface{}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1*1024*1024)).Decode(&body); err != nil {
 		return nil, fmt.Errorf("invalid request body")
 	}
 	raw, ok := body["value"]
