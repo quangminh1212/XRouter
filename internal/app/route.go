@@ -28,6 +28,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/oauth/providers", s.handleOAuthProviders)
 	s.mux.HandleFunc("/api/oauth/providers/", s.handleOAuthProviderImport)
 	s.mux.HandleFunc("/api/oauth/providers/scan-local", s.handleOAuthProviderScanLocal)
+	s.mux.HandleFunc("/api/oauth/cursor/auto-import", s.handleCursorAutoImport)
 	s.mux.HandleFunc("/api/oauth/callback", s.handleOAuthCallback)
 	s.mux.HandleFunc("/api/mcp/servers", s.handleMCPServers)
 	s.mux.HandleFunc("/api/a2a/agents", s.handleA2AAgents)

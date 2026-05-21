@@ -51,3 +51,55 @@ func TestOAuthProviderScanLocal(t *testing.T) {
 		t.Fatalf("expected secret previews, got %#v", payload.Matches[0])
 	}
 }
+
+func TestCursorAutoImportNotFound(t *testing.T) {
+	srv := newTestServer(t)
+	t.Setenv("XROUTER_CURSOR_DB", "/nonexistent/path/state.vscdb")
+	req := httptest.NewRequest(http.MethodGet, "/api/oauth/cursor/auto-import", nil)
+	req.Host = "localhost"
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	var payload struct {
+		Found bool     `json:"found"`
+		Error string   `json:"error"`
+		Paths []string `json:"checked"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if payload.Found || payload.Error == "" || len(payload.Paths) != 1 {
+		t.Fatalf("unexpected payload: %#v", payload)
+	}
+}
+
+func TestCursorAutoImportFallbackWhenSQLiteUnavailable(t *testing.T) {
+	srv := newTestServer(t)
+	tmp, err := os.CreateTemp("", "state*.vscdb")
+	if err != nil {
+		t.Fatalf("create temp db: %v", err)
+	}
+	defer os.Remove(tmp.Name())
+	tmp.Close()
+	t.Setenv("XROUTER_CURSOR_DB", tmp.Name())
+	req := httptest.NewRequest(http.MethodGet, "/api/oauth/cursor/auto-import", nil)
+	req.Host = "localhost"
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	var payload struct {
+		Found         bool   `json:"found"`
+		WindowsManual bool   `json:"windowsManual"`
+		DBPath        string `json:"dbPath"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if payload.Found || !payload.WindowsManual || payload.DBPath != tmp.Name() {
+		t.Fatalf("unexpected payload: %#v", payload)
+	}
+}
