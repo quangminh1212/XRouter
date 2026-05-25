@@ -4,9 +4,12 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"xrouter/internal/store"
 )
@@ -200,6 +203,116 @@ func numericValue(value interface{}) (float64, bool) {
 	default:
 		return 0, false
 	}
+}
+
+const kiloFreeModelsDefaultURL = "https://api.kilo.ai/api/gateway/models"
+const kiloFreeModelsCacheTTL = time.Hour
+
+type cachedKiloFreeModels struct {
+	mu        sync.Mutex
+	models    []map[string]interface{}
+	updatedAt time.Time
+}
+
+var kiloFreeModelsCache = &cachedKiloFreeModels{}
+
+func (s *Server) handleProviderKiloFreeModels(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	url := strings.TrimSpace(r.URL.Query().Get("url"))
+	if url == "" {
+		url = strings.TrimSpace(getenvDefault("XR_KILO_MODELS_URL", kiloFreeModelsDefaultURL))
+	}
+	now := time.Now()
+	kiloFreeModelsCache.mu.Lock()
+	if len(kiloFreeModelsCache.models) > 0 && now.Sub(kiloFreeModelsCache.updatedAt) < kiloFreeModelsCacheTTL {
+		models := cloneSuggestedModels(kiloFreeModelsCache.models)
+		kiloFreeModelsCache.mu.Unlock()
+		writeJSON(w, http.StatusOK, map[string]interface{}{"models": models, "cached": true})
+		return
+	}
+	kiloFreeModelsCache.mu.Unlock()
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, url, nil)
+	if err != nil {
+		writeJSON(w, http.StatusBadGateway, map[string]interface{}{"models": []map[string]interface{}{}, "error": "invalid kilo models url"})
+		return
+	}
+	req.Header.Set("Accept", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		handleKiloFreeModelsFallback(w, err.Error())
+		return
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		handleKiloFreeModelsFallback(w, "kilo api returned "+strconv.Itoa(resp.StatusCode))
+		return
+	}
+	var payload interface{}
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 2*1024*1024)).Decode(&payload); err != nil {
+		handleKiloFreeModelsFallback(w, "invalid kilo models response")
+		return
+	}
+	models := extractKiloFreeModels(extractSuggestedModelList(payload))
+	kiloFreeModelsCache.mu.Lock()
+	kiloFreeModelsCache.models = cloneSuggestedModels(models)
+	kiloFreeModelsCache.updatedAt = now
+	kiloFreeModelsCache.mu.Unlock()
+	writeJSON(w, http.StatusOK, map[string]interface{}{"models": models, "cached": false})
+}
+
+func handleKiloFreeModelsFallback(w http.ResponseWriter, warning string) {
+	kiloFreeModelsCache.mu.Lock()
+	models := cloneSuggestedModels(kiloFreeModelsCache.models)
+	kiloFreeModelsCache.mu.Unlock()
+	if len(models) > 0 {
+		writeJSON(w, http.StatusOK, map[string]interface{}{"models": models, "cached": true, "warning": warning})
+		return
+	}
+	writeJSON(w, http.StatusBadGateway, map[string]interface{}{"models": []map[string]interface{}{}, "error": "Failed to fetch Kilo models: " + warning})
+}
+
+func extractKiloFreeModels(models []map[string]interface{}) []map[string]interface{} {
+	result := []map[string]interface{}{}
+	for _, model := range models {
+		isFree, _ := model["isFree"].(bool)
+		if !isFree {
+			continue
+		}
+		contextLength, _ := numericValue(model["context_length"])
+		result = append(result, map[string]interface{}{
+			"id":             stringValue(model["id"]),
+			"name":           stringValue(model["name"]),
+			"isFree":         true,
+			"context_length": contextLength,
+		})
+	}
+	return result
+}
+
+func cloneSuggestedModels(models []map[string]interface{}) []map[string]interface{} {
+	if len(models) == 0 {
+		return []map[string]interface{}{}
+	}
+	result := make([]map[string]interface{}, 0, len(models))
+	for _, model := range models {
+		copyItem := make(map[string]interface{}, len(model))
+		for k, v := range model {
+			copyItem[k] = v
+		}
+		result = append(result, copyItem)
+	}
+	return result
+}
+
+func getenvDefault(key, fallback string) string {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return fallback
+	}
+	return value
 }
 
 func (s *Server) handleProviderTestBatch(w http.ResponseWriter, r *http.Request) {
