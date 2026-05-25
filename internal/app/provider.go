@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 
 	"xrouter/internal/store"
@@ -62,6 +63,143 @@ func (s *Server) handleProviderCatalog(w http.ResponseWriter, r *http.Request) {
 		"providers": filtered,
 		"count":     len(filtered),
 	})
+}
+
+func (s *Server) handleProviderSuggestedModels(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	url := strings.TrimSpace(r.URL.Query().Get("url"))
+	filterType := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("type")))
+	if url == "" || filterType == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "missing url or type"})
+		return
+	}
+	filter, ok := suggestedModelFilters[filterType]
+	if !ok {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "unknown filter type"})
+		return
+	}
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, url, nil)
+	if err != nil {
+		writeJSON(w, http.StatusOK, map[string]interface{}{"data": []interface{}{}})
+		return
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		writeJSON(w, http.StatusOK, map[string]interface{}{"data": []interface{}{}})
+		return
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		writeJSON(w, http.StatusOK, map[string]interface{}{"data": []interface{}{}})
+		return
+	}
+	var payload interface{}
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 2*1024*1024)).Decode(&payload); err != nil {
+		writeJSON(w, http.StatusOK, map[string]interface{}{"data": []interface{}{}})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{"data": filter(extractSuggestedModelList(payload))})
+}
+
+type suggestedModelFilter func([]map[string]interface{}) []map[string]interface{}
+
+var suggestedModelFilters = map[string]suggestedModelFilter{
+	"openrouter-free": filterOpenRouterFreeModels,
+	"opencode-free":   filterOpenCodeFreeModels,
+}
+
+func extractSuggestedModelList(payload interface{}) []map[string]interface{} {
+	if root, ok := payload.(map[string]interface{}); ok {
+		if data, ok := root["data"]; ok {
+			return normalizeSuggestedModelList(data)
+		}
+		if models, ok := root["models"]; ok {
+			return normalizeSuggestedModelList(models)
+		}
+	}
+	return normalizeSuggestedModelList(payload)
+}
+
+func normalizeSuggestedModelList(value interface{}) []map[string]interface{} {
+	items, ok := value.([]interface{})
+	if !ok {
+		return []map[string]interface{}{}
+	}
+	models := make([]map[string]interface{}, 0, len(items))
+	for _, item := range items {
+		model, ok := item.(map[string]interface{})
+		if ok {
+			models = append(models, model)
+		}
+	}
+	return models
+}
+
+func filterOpenRouterFreeModels(models []map[string]interface{}) []map[string]interface{} {
+	result := []map[string]interface{}{}
+	for _, model := range models {
+		pricing, _ := model["pricing"].(map[string]interface{})
+		if pricingString(pricing["prompt"]) != "0" || pricingString(pricing["completion"]) != "0" {
+			continue
+		}
+		contextLength, ok := numericValue(model["context_length"])
+		if !ok || contextLength < 200000 {
+			continue
+		}
+		result = append(result, map[string]interface{}{"id": stringValue(model["id"]), "name": stringValue(model["name"]), "contextLength": contextLength})
+	}
+	sort.SliceStable(result, func(i, j int) bool {
+		left, _ := numericValue(result[i]["contextLength"])
+		right, _ := numericValue(result[j]["contextLength"])
+		return left > right
+	})
+	return result
+}
+
+func filterOpenCodeFreeModels(models []map[string]interface{}) []map[string]interface{} {
+	result := []map[string]interface{}{}
+	for _, model := range models {
+		id := stringValue(model["id"])
+		if strings.HasSuffix(id, "-free") {
+			result = append(result, map[string]interface{}{"id": id, "name": id})
+		}
+	}
+	return result
+}
+
+func pricingString(value interface{}) string {
+	switch v := value.(type) {
+	case string:
+		return v
+	case float64:
+		return strconv.FormatFloat(v, 'f', -1, 64)
+	default:
+		return ""
+	}
+}
+
+func stringValue(value interface{}) string {
+	if s, ok := value.(string); ok {
+		return s
+	}
+	return ""
+}
+
+func numericValue(value interface{}) (float64, bool) {
+	switch v := value.(type) {
+	case float64:
+		return v, true
+	case int:
+		return float64(v), true
+	case json.Number:
+		f, err := v.Float64()
+		return f, err == nil
+	default:
+		return 0, false
+	}
 }
 
 func (s *Server) handleProviderTestBatch(w http.ResponseWriter, r *http.Request) {
