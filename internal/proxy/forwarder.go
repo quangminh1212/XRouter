@@ -723,17 +723,19 @@ func normalizeResponseForMode(resp *http.Response, mode string) (*http.Response,
 		headers.Set("Content-Type", "text/event-stream")
 		return cloneResponse(resp.StatusCode, headers, body), nil
 	}
-	if mode == "anthropic" {
-		resp.Body = io.NopCloser(bytes.NewReader(raw))
-		return resp, nil
-	}
 	var payload map[string]interface{}
 	if err := json.Unmarshal(raw, &payload); err != nil {
 		resp.Body = io.NopCloser(bytes.NewReader(raw))
 		return resp, nil
 	}
 	var normalized map[string]interface{}
-	if mode == "ollama" {
+	if mode == "anthropic" {
+		if _, ok := payload["content"].([]interface{}); !ok {
+			resp.Body = io.NopCloser(bytes.NewReader(raw))
+			return resp, nil
+		}
+		normalized = normalizeAnthropicToOpenAIResponse(payload)
+	} else if mode == "ollama" {
 		normalized = normalizeOllamaToOpenAIResponse(payload)
 	} else {
 		normalized = normalizeGeminiToOpenAIResponse(payload)
@@ -892,6 +894,78 @@ func normalizeOpenAIToOllamaBody(body map[string]interface{}, providerHint strin
 	}
 	raw, _ := json.Marshal(out)
 	return raw
+}
+
+func normalizeAnthropicToOpenAIResponse(raw map[string]interface{}) map[string]interface{} {
+	message := map[string]interface{}{"role": "assistant", "content": ""}
+	textChunks := make([]string, 0)
+	toolCalls := make([]map[string]interface{}, 0)
+	if content, ok := raw["content"].([]interface{}); ok {
+		for i, rawBlock := range content {
+			block, _ := rawBlock.(map[string]interface{})
+			switch stringMapValue(block, "type") {
+			case "text":
+				if text := stringMapValue(block, "text"); text != "" {
+					textChunks = append(textChunks, text)
+				}
+			case "tool_use":
+				name := stringMapValue(block, "name")
+				if name == "" {
+					continue
+				}
+				args := "{}"
+				if input := block["input"]; input != nil {
+					if encoded, err := json.Marshal(input); err == nil {
+						args = string(encoded)
+					}
+				}
+				id := stringMapValue(block, "id")
+				if id == "" {
+					id = fmt.Sprintf("tool_%d", i)
+				}
+				toolCalls = append(toolCalls, map[string]interface{}{
+					"index": i,
+					"id":    id,
+					"type":  "function",
+					"function": map[string]interface{}{
+						"name":      name,
+						"arguments": args,
+					},
+				})
+			}
+		}
+	}
+	text := strings.Join(textChunks, "\n")
+	message["content"] = text
+	if len(toolCalls) > 0 {
+		message["tool_calls"] = toolCalls
+		if strings.TrimSpace(text) == "" {
+			message["content"] = nil
+		}
+	}
+	finishReason := stringMapValue(raw, "stop_reason")
+	if finishReason == "" {
+		finishReason = "stop"
+	}
+	if finishReason == "tool_use" || len(toolCalls) > 0 {
+		finishReason = "tool_calls"
+	}
+	usage := map[string]interface{}{}
+	if rawUsage, ok := raw["usage"].(map[string]interface{}); ok {
+		inputTokens := intValue(rawUsage["input_tokens"])
+		outputTokens := intValue(rawUsage["output_tokens"])
+		usage["prompt_tokens"] = inputTokens
+		usage["completion_tokens"] = outputTokens
+		usage["total_tokens"] = inputTokens + outputTokens
+	}
+	return map[string]interface{}{
+		"id":      firstNonEmptyString(stringMapValue(raw, "id"), fmt.Sprintf("chatcmpl-anthropic-%d", time.Now().UnixNano())),
+		"object":  "chat.completion",
+		"created": time.Now().Unix(),
+		"model":   firstNonEmptyString(stringMapValue(raw, "model"), "anthropic"),
+		"choices": []map[string]interface{}{{"index": 0, "message": message, "finish_reason": finishReason}},
+		"usage":   usage,
+	}
 }
 
 func normalizeOllamaToOpenAIResponse(raw map[string]interface{}) map[string]interface{} {

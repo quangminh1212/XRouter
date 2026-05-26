@@ -561,6 +561,79 @@ func TestNormalizeResponseForModeAnthropicSSE(t *testing.T) {
 	}
 }
 
+func TestNormalizeAnthropicToOpenAIResponseText(t *testing.T) {
+	raw := map[string]interface{}{
+		"id":    "msg_1",
+		"model": "claude-3-5-sonnet-20241022",
+		"content": []interface{}{
+			map[string]interface{}{"type": "text", "text": "Hello"},
+			map[string]interface{}{"type": "text", "text": "world"},
+		},
+		"stop_reason": "end_turn",
+		"usage":       map[string]interface{}{"input_tokens": float64(7), "output_tokens": float64(3)},
+	}
+	out := normalizeAnthropicToOpenAIResponse(raw)
+	choices, ok := out["choices"].([]map[string]interface{})
+	if !ok || len(choices) != 1 {
+		t.Fatalf("unexpected choices: %#v", out)
+	}
+	msg, _ := choices[0]["message"].(map[string]interface{})
+	if msg["content"] != "Hello\nworld" {
+		t.Fatalf("unexpected content: %#v", msg)
+	}
+	usage, _ := out["usage"].(map[string]interface{})
+	if usage["total_tokens"] != 10 {
+		t.Fatalf("unexpected usage: %#v", usage)
+	}
+}
+
+func TestNormalizeAnthropicToOpenAIResponseToolUse(t *testing.T) {
+	raw := map[string]interface{}{
+		"id":    "msg_tool_1",
+		"model": "claude-3-5-sonnet-20241022",
+		"content": []interface{}{
+			map[string]interface{}{"type": "tool_use", "id": "toolu_1", "name": "get_weather", "input": map[string]interface{}{"city": "Hanoi"}},
+		},
+		"stop_reason": "tool_use",
+	}
+	out := normalizeAnthropicToOpenAIResponse(raw)
+	choices, ok := out["choices"].([]map[string]interface{})
+	if !ok || len(choices) != 1 {
+		t.Fatalf("unexpected choices: %#v", out)
+	}
+	if choices[0]["finish_reason"] != "tool_calls" {
+		t.Fatalf("unexpected finish reason: %#v", choices[0])
+	}
+	msg, _ := choices[0]["message"].(map[string]interface{})
+	calls, ok := msg["tool_calls"].([]map[string]interface{})
+	if !ok || len(calls) != 1 {
+		t.Fatalf("unexpected tool calls: %#v", msg)
+	}
+	fn, _ := calls[0]["function"].(map[string]interface{})
+	if fn["name"] != "get_weather" || !strings.Contains(fn["arguments"].(string), "Hanoi") {
+		t.Fatalf("unexpected function payload: %#v", fn)
+	}
+}
+
+func TestNormalizeResponseForModeAnthropicJSON(t *testing.T) {
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"Content-Type": []string{"application/json"}},
+		Body:       io.NopCloser(strings.NewReader(`{"id":"msg_1","model":"claude","content":[{"type":"text","text":"Hi"}],"stop_reason":"end_turn"}`)),
+	}
+	normalized, err := normalizeResponseForMode(resp, "anthropic")
+	if err != nil {
+		t.Fatalf("normalize response: %v", err)
+	}
+	body, err := io.ReadAll(normalized.Body)
+	if err != nil {
+		t.Fatalf("read body: %v", err)
+	}
+	if !strings.Contains(string(body), `"chat.completion"`) || !strings.Contains(string(body), `"content":"Hi"`) {
+		t.Fatalf("unexpected normalized anthropic body: %s", string(body))
+	}
+}
+
 func TestResolveEndpointOllamaAPIType(t *testing.T) {
 	got, mode, err := resolveEndpoint(store.ProviderConnection{Provider: "ollama-local", ProviderSpecificData: map[string]interface{}{"baseUrl": "http://localhost:11434", "apiType": "ollama"}}, "ollama-local/llama3.1", "/v1/chat/completions")
 	if err != nil {
