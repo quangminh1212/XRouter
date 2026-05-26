@@ -204,6 +204,7 @@ func TestProviderScopedCompatRoutesCoverExtendedEndpoints(t *testing.T) {
 		{name: "audio voices", path: "/api/provider/openai/v1/audio/voices", method: http.MethodGet, kind: "voices"},
 		{name: "audio transcriptions", path: "/api/provider/openai/v1/audio/transcriptions", method: http.MethodPost, body: `{"model":"whisper-1"}`, upstreamPath: "/v1/audio/transcriptions", kind: "media"},
 		{name: "image edits", path: "/api/provider/openai/v1/images/edits", method: http.MethodPost, body: `{"model":"gpt-image-1"}`, upstreamPath: "/v1/images/edits", kind: "media"},
+		{name: "image generations", path: "/api/provider/openai/v1/images/generations", method: http.MethodPost, body: `{"model":"gpt-image-1"}`, upstreamPath: "/v1/images/generations", kind: "media"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

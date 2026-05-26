@@ -101,7 +101,7 @@ Legend: Done = implemented and tested locally; Partial = present but not as broa
 | Feature | Reference source | XRouter status | Evidence / note | Priority |
 |---|---|---:|---|---:|
 | Embeddings | 9router, CLIProxyAPI | Done | Scoped route and forwarder media tests | P1 |
-| Image generation | 9router/OmniRoute | Done | `images_test.go`, media resolver | P1 |
+| Image generation | 9router/OmniRoute | Done | `images_test.go`, provider-scoped generation coverage, media resolver | P1 |
 | Image edits | OpenAI-compatible media | Done/Partial | Added direct and provider-scoped route coverage; broader provider-specific payload variants still partial | P2 |
 | Audio speech/TTS | 9router/CLIProxyAPI | Done | `voices_test.go`, forwarder media tests | P1 |
 | Audio transcriptions/STT | 9router/CLIProxyAPI | Done/Partial | Added direct, `/api/v1`, AssemblyAI flow, and provider-scoped STT tests; broader provider set still partial | P1 |
