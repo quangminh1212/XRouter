@@ -299,6 +299,7 @@ func TestProviderScopedCompatRoutesCoverExtendedEndpoints(t *testing.T) {
 		kind         string
 	}{
 		{name: "count tokens", path: "/api/provider/anthropic/v1/messages/count_tokens", method: http.MethodPost, body: `{"model":"claude-3-5-sonnet-latest","messages":[{"role":"user","content":"hi"}]}`, upstreamPath: "/v1/messages/count_tokens", kind: "proxy"},
+		{name: "messages api v1", path: "/api/v1/providers/anthropic/v1/messages", method: http.MethodPost, body: `{"model":"claude-3-5-sonnet-latest","messages":[{"role":"user","content":"hi"}]}`, upstreamPath: "/v1/messages", kind: "proxy"},
 		{name: "responses compact", path: "/api/provider/openai/v1/responses/compact", method: http.MethodPost, body: `{"model":"gpt-4o-mini","input":"hi"}`, upstreamPath: "/responses", kind: "proxy"},
 		{name: "responses direct", path: "/api/provider/openai/v1/responses", method: http.MethodPost, body: `{"model":"gpt-4o-mini","input":"hi"}`, upstreamPath: "/responses", kind: "proxy"},
 		{name: "image analyze", path: "/api/provider/openai/images/analyze", method: http.MethodPost, body: `{"model":"gpt-4o-mini","image":"data"}`, upstreamPath: "/v1/chat/completions", kind: "media"},
@@ -335,6 +336,10 @@ func TestProviderScopedCompatRoutesCoverExtendedEndpoints(t *testing.T) {
 				provider := "openai"
 				apiType := "openai"
 				if tt.kind == "proxy" && strings.Contains(tt.path, "/anthropic/") {
+					provider = "anthropic"
+					apiType = "anthropic"
+				}
+				if tt.kind == "proxy" && strings.Contains(tt.path, "/api/v1/providers/anthropic/") {
 					provider = "anthropic"
 					apiType = "anthropic"
 				}
