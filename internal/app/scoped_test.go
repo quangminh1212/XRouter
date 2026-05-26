@@ -274,6 +274,7 @@ func TestProviderScopedCompatRoutesCoverExtendedEndpoints(t *testing.T) {
 		{name: "audio voices", path: "/api/provider/openai/v1/audio/voices", method: http.MethodGet, kind: "voices"},
 		{name: "audio voices api v1", path: "/api/v1/providers/openai/audio/voices", method: http.MethodGet, kind: "voices"},
 		{name: "audio transcriptions", path: "/api/provider/openai/v1/audio/transcriptions", method: http.MethodPost, body: `{"model":"whisper-1"}`, upstreamPath: "/v1/audio/transcriptions", kind: "media"},
+		{name: "audio transcriptions api v1", path: "/api/v1/providers/openai/audio/transcriptions", method: http.MethodPost, body: `{"model":"whisper-1"}`, upstreamPath: "/v1/audio/transcriptions", kind: "media"},
 		{name: "audio generations", path: "/api/provider/openai/v1/audio/generations", method: http.MethodPost, body: `{"model":"gpt-4o-mini-tts","input":"hello"}`, upstreamPath: "/v1/audio/generations", kind: "media"},
 		{name: "audio speech", path: "/api/provider/openai/v1/audio/speech", method: http.MethodPost, body: `{"model":"gpt-4o-mini-tts","input":"hello","voice":"alloy"}`, upstreamPath: "/v1/audio/speech", kind: "media"},
 		{name: "image edits", path: "/api/provider/openai/v1/images/edits", method: http.MethodPost, body: `{"model":"gpt-image-1"}`, upstreamPath: "/v1/images/edits", kind: "media"},
