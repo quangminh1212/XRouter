@@ -1,6 +1,7 @@
 package app
 
 import (
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -81,6 +82,55 @@ func TestWebsocketProxyHTTPRequestResponse(t *testing.T) {
 		t.Fatalf("unexpected status payload: %#v", msg.Payload)
 	}
 	if !strings.Contains(msg.Payload["body"].(string), "chatcmpl_ws_1") {
+		t.Fatalf("unexpected body: %#v", msg.Payload)
+	}
+}
+
+func TestWebsocketProxyHTTPRequestAcceptsObjectBody(t *testing.T) {
+	srv := newTestServer(t)
+	_, _ = srv.store.UpdateSettings(map[string]interface{}{"requireApiKey": false})
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/chat/completions" {
+			t.Fatalf("unexpected upstream path: %s", r.URL.Path)
+		}
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("read upstream body: %v", err)
+		}
+		if !strings.Contains(string(body), `"model":"gpt-4o-mini"`) || !strings.Contains(string(body), `"content":"hi from object"`) {
+			t.Fatalf("unexpected upstream body: %s", string(body))
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{"id": "chatcmpl_ws_obj_1"})
+	}))
+	defer upstream.Close()
+	_, _ = srv.store.CreateProviderConnection(store.ProviderConnection{Provider: "openai", Name: "ws openai object", AuthType: "apikey", APIKey: "x", IsActive: true, ProviderSpecificData: map[string]interface{}{"baseUrl": upstream.URL, "apiType": "openai"}})
+	ts := httptest.NewServer(srv)
+	defer ts.Close()
+	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http") + "/api/v1/ws"
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, http.Header{})
+	if err != nil {
+		t.Fatalf("dial websocket: %v", err)
+	}
+	defer conn.Close()
+	payload := map[string]interface{}{
+		"method": "POST",
+		"url":    "/v1/chat/completions",
+		"body": map[string]interface{}{
+			"model":    "openai/gpt-4o-mini",
+			"messages": []map[string]string{{"role": "user", "content": "hi from object"}},
+		},
+	}
+	if err := conn.WriteJSON(wsRelayMessage{ID: "req-obj", Type: "http_request", Payload: payload}); err != nil {
+		t.Fatalf("write request: %v", err)
+	}
+	var msg wsRelayMessage
+	if err := conn.ReadJSON(&msg); err != nil {
+		t.Fatalf("read response: %v", err)
+	}
+	if msg.Type != "http_response" || msg.Payload["status"] != float64(200) {
+		t.Fatalf("unexpected ws response: %#v", msg)
+	}
+	if !strings.Contains(msg.Payload["body"].(string), "chatcmpl_ws_obj_1") {
 		t.Fatalf("unexpected body: %#v", msg.Payload)
 	}
 }

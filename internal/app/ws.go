@@ -76,7 +76,11 @@ func (s *Server) handleWSHTTPRelayMessage(conn *websocket.Conn, apiKeyID string,
 	if !strings.HasPrefix(path, "/") {
 		path = "/" + path
 	}
-	body := []byte(stringPayload(payload, "body", ""))
+	body, err := websocketRelayBody(payload)
+	if err != nil {
+		_ = conn.WriteJSON(wsRelayMessage{ID: msg.ID, Type: "error", Payload: map[string]interface{}{"error": err.Error(), "status": http.StatusBadRequest}})
+		return
+	}
 	if method != http.MethodPost {
 		_ = conn.WriteJSON(wsRelayMessage{ID: msg.ID, Type: "error", Payload: map[string]interface{}{"error": "only POST is supported", "status": http.StatusMethodNotAllowed}})
 		return
@@ -113,6 +117,28 @@ func (s *Server) handleWSHTTPRelayMessage(conn *websocket.Conn, apiKeyID string,
 		return
 	}
 	_ = conn.WriteJSON(wsRelayMessage{ID: msg.ID, Type: "http_response", Payload: map[string]interface{}{"status": resp.StatusCode, "headers": headersToPayload(resp.Header), "body": string(rawResp)}})
+}
+
+func websocketRelayBody(payload map[string]interface{}) ([]byte, error) {
+	if payload == nil {
+		return nil, nil
+	}
+	body, ok := payload["body"]
+	if !ok || body == nil {
+		return nil, nil
+	}
+	switch value := body.(type) {
+	case string:
+		return []byte(strings.TrimSpace(value)), nil
+	case []byte:
+		return value, nil
+	default:
+		raw, err := json.Marshal(value)
+		if err != nil {
+			return nil, fmt.Errorf("invalid websocket request body")
+		}
+		return raw, nil
+	}
 }
 
 func headersToPayload(headers http.Header) map[string]interface{} {

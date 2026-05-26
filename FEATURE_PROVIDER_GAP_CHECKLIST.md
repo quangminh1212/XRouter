@@ -118,7 +118,7 @@ Legend: Done = implemented and tested locally; Partial = present but not as broa
 | Local-only management protection | all 3 | Done/Partial | Added localhost-only guard for usage/debug endpoints; remaining audit mainly concerns non-management read-only surfaces | P0 |
 | Dashboard login/session | 9router | Partial | `requireLogin` setting exists, but not full 9router NextAuth/session UI parity | P2 |
 | Outbound proxy settings | CLIProxyAPI/9router | Done/Partial | Added `outboundNoProxy` bypass matching for localhost, exact host, suffix and wildcard domains; env parity still partial | P1 |
-| WebSocket relay/gateway | CLIProxyAPI | Done/Partial | Added minimal `/api/v1/ws` websocket relay with ping/pong, `http_request`, `http_response`, `stream_start`, `stream_chunk`, `stream_end`; still not as full-featured as CLIProxyAPI wsrelay manager | P1 |
+| WebSocket relay/gateway | CLIProxyAPI | Done/Partial | Added minimal `/api/v1/ws` relay with ping/pong, HTTP/stream messages, plus native JSON body support for `http_request`; still not as full-featured as CLIProxyAPI wsrelay manager | P1 |
 | Redis usage output/queue | CLIProxyAPI | Missing | No clear Redis queue protocol parity found | P3 |
 | SDK embeddability | CLIProxyAPI | Missing | No public reusable Go SDK package comparable to CLIProxyAPI sdk | P3 |
 | Docker/self-host docs | all 3 | Partial/Missing | Release/CI exists; Docker parity not seen in README | P3 |
@@ -160,7 +160,7 @@ Legend: Done = implemented and tested locally; Partial = present but not as broa
 | Go SDK packages | CLIProxyAPI | Missing | XRouter is app-oriented internal packages | P3 |
 | Translator registry | CLIProxyAPI | Partial/Missing | Forwarder has normalization helpers, not a public registry | P2 |
 | Pipeline middleware | CLIProxyAPI | Missing/Partial | No comparable SDK pipeline abstraction | P3 |
-| WebSocket downstream transport | CLIProxyAPI | Missing | No equivalent `internal/wsrelay` found | P1 |
+| WebSocket downstream transport | CLIProxyAPI | Done/Partial | `/api/v1/ws` supports downstream HTTP/stream relay, but still lacks a fuller dedicated wsrelay subsystem | P1 |
 | Amp provider aliases `/api/provider/{provider}/...` | CLIProxyAPI | Done/Partial | Core provider-scoped aliases now work for major chat/media/model paths, but full CLIProxyAPI breadth still needs more audit | P1 |
 | Redis protocol integration | CLIProxyAPI | Missing | No Redis protocol endpoints found | P3 |
 | Usage plugin manager | CLIProxyAPI | Partial/Missing | XRouter has local usage DB/stats, not plugin manager | P3 |
