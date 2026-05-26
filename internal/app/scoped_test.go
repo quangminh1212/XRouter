@@ -188,6 +188,38 @@ func TestAPIV1ProviderScopedChatCompatRoute(t *testing.T) {
 	}
 }
 
+func TestAPIV1ProviderScopedResponsesCompatRoute(t *testing.T) {
+	srv := newTestServer(t)
+	if _, err := srv.store.UpdateSettings(map[string]interface{}{"requireApiKey": false}); err != nil {
+		t.Fatalf("disable api key auth: %v", err)
+	}
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/responses" {
+			t.Fatalf("unexpected upstream path: %s", r.URL.Path)
+		}
+		var payload map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode upstream body: %v", err)
+		}
+		if payload["model"] != "gpt-4o-mini" {
+			t.Fatalf("unexpected model payload: %#v", payload)
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{"id": "resp_api_v1_responses"})
+	}))
+	defer upstream.Close()
+	_, _ = srv.store.CreateProviderConnection(store.ProviderConnection{
+		Provider: "openai", Name: "openai scoped responses", AuthType: "apikey", APIKey: "x", IsActive: true,
+		ProviderSpecificData: map[string]interface{}{"baseUrl": upstream.URL, "apiType": "responses"},
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/providers/openai/responses", bytes.NewBufferString(`{"model":"gpt-4o-mini","input":"hi"}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestAPIV1ProviderScopedEmbeddingsCompatRoute(t *testing.T) {
 	srv := newTestServer(t)
 	if _, err := srv.store.UpdateSettings(map[string]interface{}{"requireApiKey": false}); err != nil {
