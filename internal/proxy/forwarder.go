@@ -1453,6 +1453,8 @@ func (f *Forwarder) reorderCandidates(scope, model string, candidates []store.Pr
 		return sortCandidatesByCost(candidates, model)
 	case "auto":
 		return f.sortCandidatesAuto(candidates, model)
+	case "last_known_good":
+		return f.sortCandidatesLastKnownGood(candidates, model)
 	default:
 		return candidates
 	}
@@ -1506,6 +1508,47 @@ func (f *Forwarder) sortCandidatesAuto(candidates []store.ProviderConnection, mo
 		return 1
 	})
 	return out
+}
+
+func (f *Forwarder) sortCandidatesLastKnownGood(candidates []store.ProviderConnection, model string) []store.ProviderConnection {
+	lastGood := f.lastKnownGoodProviders(200)
+	if len(lastGood) == 0 {
+		return f.sortCandidatesAuto(candidates, model)
+	}
+	out := append([]store.ProviderConnection(nil), candidates...)
+	slices.SortStableFunc(out, func(a, b store.ProviderConnection) int {
+		aRank := lastGood[a.Provider]
+		bRank := lastGood[b.Provider]
+		if aRank == bRank {
+			return strings.Compare(a.Provider, b.Provider)
+		}
+		if aRank == 0 {
+			return 1
+		}
+		if bRank == 0 {
+			return -1
+		}
+		return aRank - bRank
+	})
+	return out
+}
+
+func (f *Forwarder) lastKnownGoodProviders(limit int) map[string]int {
+	logs := f.store.GetRequestLogs(limit)
+	ranks := map[string]int{}
+	rank := 1
+	for _, item := range logs {
+		provider := strings.TrimSpace(item.Provider)
+		if provider == "" || item.StatusCode < 200 || item.StatusCode >= 400 {
+			continue
+		}
+		if _, exists := ranks[provider]; exists {
+			continue
+		}
+		ranks[provider] = rank
+		rank++
+	}
+	return ranks
 }
 
 type providerRouteMetrics struct {

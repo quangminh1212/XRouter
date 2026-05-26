@@ -135,7 +135,7 @@ Legend: Done = implemented and tested locally; Partial = present but not as broa
 | Caveman compression | OmniRoute | Missing | No implementation found | P3 |
 | Automatic token-saving pipeline | OmniRoute | Done/Partial | Added opt-in request compaction via `/compact` paths or `xrouter_compact`; not full OmniRoute RTK/Caveman | P3 |
 | Context relay / context optimized routing | OmniRoute | Missing | No evidence of context handoff strategy | P3 |
-| Last-known-good-provider routing | OmniRoute | Missing/Partial | Sticky routing exists; LKGP scoring not proven | P2 |
+| Last-known-good-provider routing | OmniRoute | Done/Partial | Added `last_known_good` strategy using most recent successful provider history from request logs | P2 |
 | Latency/success/freshness scoring | OmniRoute | Partial | Metrics exist; no full auto-score engine found | P2 |
 | Guardrails/evals | OmniRoute | Missing | No clear guardrail/eval subsystem | P3 |
 | TLS stealth | OmniRoute | Missing | No clear TLS fingerprint/stealth transport implementation | P3 |
@@ -169,7 +169,7 @@ Legend: Done = implemented and tested locally; Partial = present but not as broa
 
 1. P0 hardening: add/expand integration tests for Claude/Gemini/OpenAI streaming, tool calls, multimodal chat, and management localhost auth.
 2. P1 parity: WebSocket relay, fuller translator coverage OpenAI/Claude/Gemini, live OAuth validation flows, model lockout/account backoff parity.
-3. P2 routing: Auto routing, cost optimizer, latency/success scoring, provider health-driven routing.
+3. P2 routing: Auto routing, cost optimizer, latency/success scoring, provider health-driven routing, LKGP strategy.
 4. P3 breadth: RTK/Caveman compression, MITM handlers, SDK extraction, Redis/usage plugins, Docker/self-host docs.
 5. P4 polish: i18n/large website/dashboard parity only if product direction requires it.
 

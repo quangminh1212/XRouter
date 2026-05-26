@@ -235,7 +235,7 @@ func (s *Server) handleManagementModelAvailability(w http.ResponseWriter, r *htt
 
 func validRoutingStrategy(value string) bool {
 	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "fallback", "round_robin", "sticky_round_robin", "cost_optimized", "auto":
+	case "fallback", "round_robin", "sticky_round_robin", "cost_optimized", "auto", "last_known_good":
 		return true
 	default:
 		return false

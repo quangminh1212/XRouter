@@ -51,7 +51,7 @@ func TestManagementRoutingStrategyRejectsInvalidStrategy(t *testing.T) {
 
 func TestManagementRoutingStrategyAcceptsAutoAndCostOptimized(t *testing.T) {
 	srv := newTestServer(t)
-	for _, strategy := range []string{"auto", "cost_optimized"} {
+	for _, strategy := range []string{"auto", "cost_optimized", "last_known_good"} {
 		t.Run(strategy, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodPatch, "/api/management/routing-strategy", bytes.NewBufferString(`{"comboStrategy":"`+strategy+`"}`))
 			req.Host = "localhost"

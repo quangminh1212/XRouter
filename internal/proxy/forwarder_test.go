@@ -681,6 +681,27 @@ func TestReorderCandidatesAutoPrefersHealthyFastProvider(t *testing.T) {
 	}
 }
 
+func TestReorderCandidatesLastKnownGoodPrefersRecentSuccess(t *testing.T) {
+	st, err := store.NewStore()
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	_, _ = st.UpdateSettings(map[string]interface{}{"comboStrategy": "last_known_good"})
+	_ = st.RecordRequestLog(store.RequestLog{Provider: "old-good", StatusCode: 200, LatencyMs: 100})
+	_ = st.RecordRequestLog(store.RequestLog{Provider: "bad", StatusCode: 500, LatencyMs: 50})
+	_ = st.RecordRequestLog(store.RequestLog{Provider: "new-good", StatusCode: 200, LatencyMs: 200})
+	f := NewForwarder(st)
+	candidates := []store.ProviderConnection{
+		{Provider: "bad"},
+		{Provider: "old-good"},
+		{Provider: "new-good"},
+	}
+	got := f.reorderCandidates("scope", "openai/gpt-4o-mini", candidates)
+	if len(got) != 3 || got[0].Provider != "new-good" || got[1].Provider != "old-good" {
+		t.Fatalf("expected recent successful providers first, got %#v", got)
+	}
+}
+
 func TestCompactRequestBodyOptIn(t *testing.T) {
 	body := map[string]interface{}{
 		"xrouter_compact": true,

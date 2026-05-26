@@ -188,6 +188,8 @@ func cliProxyRoutingStrategy(value string) (string, bool) {
 		return "cost_optimized", true
 	case "auto", "smart", "auto/smart":
 		return "auto", true
+	case "last-known-good", "last_known_good", "lkg", "lkgp":
+		return "last_known_good", true
 	default:
 		return "", false
 	}
