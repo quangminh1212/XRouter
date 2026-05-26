@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"xrouter/internal/store"
@@ -176,5 +177,71 @@ func TestAPIV1ProviderScopedModelsCompatRoute(t *testing.T) {
 	srv.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	var payload struct {
+		Models []map[string]string `json:"models"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(payload.Models) == 0 {
+		t.Fatalf("expected models payload, got %s", rec.Body.String())
+	}
+}
+
+func TestProviderScopedCompatRoutesCoverExtendedEndpoints(t *testing.T) {
+	tests := []struct {
+		name         string
+		path         string
+		method       string
+		body         string
+		upstreamPath string
+		kind         string
+	}{
+		{name: "count tokens", path: "/api/provider/anthropic/v1/messages/count_tokens", method: http.MethodPost, body: `{"model":"claude-3-5-sonnet-latest","messages":[{"role":"user","content":"hi"}]}`, upstreamPath: "/v1/messages/count_tokens", kind: "proxy"},
+		{name: "responses compact", path: "/api/provider/openai/v1/responses/compact", method: http.MethodPost, body: `{"model":"gpt-4o-mini","input":"hi"}`, upstreamPath: "/responses", kind: "proxy"},
+		{name: "image analyze", path: "/api/provider/openai/images/analyze", method: http.MethodPost, body: `{"model":"gpt-4o-mini","image":"data"}`, upstreamPath: "/v1/chat/completions", kind: "media"},
+		{name: "audio voices", path: "/api/provider/openai/v1/audio/voices", method: http.MethodGet, kind: "voices"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			srv := newTestServer(t)
+			if _, err := srv.store.UpdateSettings(map[string]interface{}{"requireApiKey": false}); err != nil {
+				t.Fatalf("disable api key auth: %v", err)
+			}
+			if tt.kind != "voices" {
+				upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if r.URL.Path != tt.upstreamPath {
+						t.Fatalf("unexpected upstream path: %s", r.URL.Path)
+					}
+					writeJSON(w, http.StatusOK, map[string]interface{}{"ok": true})
+				}))
+				defer upstream.Close()
+				provider := "openai"
+				apiType := "openai"
+				if tt.kind == "proxy" && strings.Contains(tt.path, "/anthropic/") {
+					provider = "anthropic"
+					apiType = "anthropic"
+				}
+				_, _ = srv.store.CreateProviderConnection(store.ProviderConnection{
+					Provider: provider, Name: provider + " scoped extended", AuthType: "apikey", APIKey: "x", IsActive: true,
+					ProviderSpecificData: map[string]interface{}{"baseUrl": upstream.URL, "apiType": apiType},
+				})
+			}
+			var body io.Reader
+			if tt.body != "" {
+				body = bytes.NewBufferString(tt.body)
+			}
+			req := httptest.NewRequest(tt.method, tt.path, body)
+			req.Header.Set("Content-Type", "application/json")
+			rec := httptest.NewRecorder()
+			srv.ServeHTTP(rec, req)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
+			}
+			if strings.Contains(rec.Body.String(), `"name":"xrouter"`) {
+				t.Fatalf("route fell through to root handler: %s", rec.Body.String())
+			}
+		})
 	}
 }

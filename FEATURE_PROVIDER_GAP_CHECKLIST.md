@@ -18,6 +18,8 @@ Legend: Done = implemented and tested locally; Partial = present but not as broa
 | Function/tool calling pass-through | OmniRoute, CLIProxyAPI | Partial | Proxy likely forwards JSON, but dedicated cross-format tool translation parity not proven | P1 |
 | Multimodal text+image | CLIProxyAPI | Partial | Image endpoints exist; multimodal chat transformation parity not fully proven | P1 |
 | Streaming pass-through | all 3 | Done/Partial | Responses stream alias tested; full SSE transform across all provider schemas needs more tests | P0 |
+| Provider-scoped compat routes `/api/provider/{provider}/...` | CLIProxyAPI | Done/Partial | Added real scoped routing for chat, responses compact, count_tokens, media, search/fetch, voices, models with regression tests in `scoped_test.go` | P1 |
+| Provider-scoped compat routes `/api/v1/providers/{provider}/...` | 9router, CLIProxyAPI | Done/Partial | Registered real route alias and regression tests to avoid falling through to root handler | P1 |
 
 ## Provider coverage
 
@@ -159,7 +161,7 @@ Legend: Done = implemented and tested locally; Partial = present but not as broa
 | Translator registry | CLIProxyAPI | Partial/Missing | Forwarder has normalization helpers, not a public registry | P2 |
 | Pipeline middleware | CLIProxyAPI | Missing/Partial | No comparable SDK pipeline abstraction | P3 |
 | WebSocket downstream transport | CLIProxyAPI | Missing | No equivalent `internal/wsrelay` found | P1 |
-| Amp provider aliases `/api/provider/{provider}/...` | CLIProxyAPI | Partial | Amp file exists but breadth needs route parity audit | P2 |
+| Amp provider aliases `/api/provider/{provider}/...` | CLIProxyAPI | Done/Partial | Core provider-scoped aliases now work for major chat/media/model paths, but full CLIProxyAPI breadth still needs more audit | P1 |
 | Redis protocol integration | CLIProxyAPI | Missing | No Redis protocol endpoints found | P3 |
 | Usage plugin manager | CLIProxyAPI | Partial/Missing | XRouter has local usage DB/stats, not plugin manager | P3 |
 
@@ -167,7 +169,7 @@ Legend: Done = implemented and tested locally; Partial = present but not as broa
 
 1. P0 hardening: add/expand integration tests for Claude/Gemini/OpenAI streaming, tool calls, multimodal chat, and management localhost auth.
 2. P1 parity: WebSocket relay, fuller translator coverage OpenAI/Claude/Gemini, live OAuth validation flows, model lockout/account backoff parity.
-3. P2 routing: Auto routing, cost optimizer, latency/success scoring, provider health-driven routing, Amp/provider alias route parity.
+3. P2 routing: Auto routing, cost optimizer, latency/success scoring, provider health-driven routing.
 4. P3 breadth: RTK/Caveman compression, MITM handlers, SDK extraction, Redis/usage plugins, Docker/self-host docs.
 5. P4 polish: i18n/large website/dashboard parity only if product direction requires it.
 
