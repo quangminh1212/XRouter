@@ -222,6 +222,7 @@ func TestProviderScopedCompatRoutesCoverExtendedEndpoints(t *testing.T) {
 	}{
 		{name: "count tokens", path: "/api/provider/anthropic/v1/messages/count_tokens", method: http.MethodPost, body: `{"model":"claude-3-5-sonnet-latest","messages":[{"role":"user","content":"hi"}]}`, upstreamPath: "/v1/messages/count_tokens", kind: "proxy"},
 		{name: "responses compact", path: "/api/provider/openai/v1/responses/compact", method: http.MethodPost, body: `{"model":"gpt-4o-mini","input":"hi"}`, upstreamPath: "/responses", kind: "proxy"},
+		{name: "responses direct", path: "/api/provider/openai/v1/responses", method: http.MethodPost, body: `{"model":"gpt-4o-mini","input":"hi"}`, upstreamPath: "/responses", kind: "proxy"},
 		{name: "image analyze", path: "/api/provider/openai/images/analyze", method: http.MethodPost, body: `{"model":"gpt-4o-mini","image":"data"}`, upstreamPath: "/v1/chat/completions", kind: "media"},
 		{name: "audio voices", path: "/api/provider/openai/v1/audio/voices", method: http.MethodGet, kind: "voices"},
 		{name: "audio transcriptions", path: "/api/provider/openai/v1/audio/transcriptions", method: http.MethodPost, body: `{"model":"whisper-1"}`, upstreamPath: "/v1/audio/transcriptions", kind: "media"},
