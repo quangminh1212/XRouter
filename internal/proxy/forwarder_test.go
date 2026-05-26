@@ -508,3 +508,53 @@ func TestNormalizeResponseForModeGeminiSSE(t *testing.T) {
 		t.Fatalf("unexpected content-type: %q", got)
 	}
 }
+
+func TestNormalizeAnthropicSSEToOpenAIText(t *testing.T) {
+	raw := []byte("event: message_start\ndata: {\"type\":\"message_start\"}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"Hello\"}}\n\nevent: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"}}\n\nevent: message_stop\ndata: {\"type\":\"message_stop\"}\n\n")
+	out := string(normalizeAnthropicSSEToOpenAI(raw))
+	if !strings.Contains(out, `"object":"chat.completion.chunk"`) {
+		t.Fatalf("expected chunk object, got %s", out)
+	}
+	if !strings.Contains(out, `"content":"Hello"`) {
+		t.Fatalf("expected content chunk, got %s", out)
+	}
+	if !strings.Contains(out, `"finish_reason":"end_turn"`) && !strings.Contains(out, `"finish_reason":"stop"`) {
+		t.Fatalf("expected finish reason chunk, got %s", out)
+	}
+}
+
+func TestNormalizeAnthropicSSEToOpenAIToolUse(t *testing.T) {
+	raw := []byte("event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":1,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_1\",\"name\":\"get_weather\"}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"city\\\":\\\"Hanoi\\\"}\"}}\n\nevent: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\"}}\n\n")
+	out := string(normalizeAnthropicSSEToOpenAI(raw))
+	if !strings.Contains(out, `"tool_calls"`) {
+		t.Fatalf("expected tool_calls in chunk, got %s", out)
+	}
+	if !strings.Contains(out, `"name":"get_weather"`) {
+		t.Fatalf("expected tool name, got %s", out)
+	}
+	if !strings.Contains(out, `Hanoi`) {
+		t.Fatalf("expected tool args, got %s", out)
+	}
+	if !strings.Contains(out, `"finish_reason":"tool_calls"`) {
+		t.Fatalf("expected tool_calls finish reason, got %s", out)
+	}
+}
+
+func TestNormalizeResponseForModeAnthropicSSE(t *testing.T) {
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"Content-Type": []string{"text/event-stream"}},
+		Body:       io.NopCloser(strings.NewReader("event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"Hi\"}}\n\n")),
+	}
+	normalized, err := normalizeResponseForMode(resp, "anthropic")
+	if err != nil {
+		t.Fatalf("normalize response: %v", err)
+	}
+	body, err := io.ReadAll(normalized.Body)
+	if err != nil {
+		t.Fatalf("read body: %v", err)
+	}
+	if !strings.Contains(string(body), `"chat.completion.chunk"`) {
+		t.Fatalf("unexpected normalized anthropic sse body: %s", string(body))
+	}
+}

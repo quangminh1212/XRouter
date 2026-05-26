@@ -643,7 +643,7 @@ func normalizeOpenAIToGeminiBody(body map[string]interface{}, providerHint strin
 }
 
 func normalizeResponseForMode(resp *http.Response, mode string) (*http.Response, error) {
-	if mode != "gemini" {
+	if mode != "gemini" && mode != "anthropic" {
 		return resp, nil
 	}
 	defer resp.Body.Close()
@@ -658,9 +658,18 @@ func normalizeResponseForMode(resp *http.Response, mode string) (*http.Response,
 	headers := cloneHeader(resp.Header)
 	contentType := strings.ToLower(headers.Get("Content-Type"))
 	if strings.Contains(contentType, "text/event-stream") {
-		body := normalizeGeminiSSEToOpenAI(raw)
+		var body []byte
+		if mode == "gemini" {
+			body = normalizeGeminiSSEToOpenAI(raw)
+		} else {
+			body = normalizeAnthropicSSEToOpenAI(raw)
+		}
 		headers.Set("Content-Type", "text/event-stream")
 		return cloneResponse(resp.StatusCode, headers, body), nil
+	}
+	if mode == "anthropic" {
+		resp.Body = io.NopCloser(bytes.NewReader(raw))
+		return resp, nil
 	}
 	var payload map[string]interface{}
 	if err := json.Unmarshal(raw, &payload); err != nil {
@@ -673,6 +682,141 @@ func normalizeResponseForMode(resp *http.Response, mode string) (*http.Response,
 	return cloneResponse(resp.StatusCode, headers, body), nil
 }
 
+type anthropicToolStreamState struct {
+	id       string
+	name     string
+	jsonText string
+}
+
+func normalizeAnthropicSSEToOpenAI(raw []byte) []byte {
+	lines := strings.Split(string(raw), "\n")
+	out := make([]string, 0, len(lines)+1)
+	currentEvent := ""
+	toolStates := map[int]*anthropicToolStreamState{}
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "event:") {
+			currentEvent = strings.TrimSpace(strings.TrimPrefix(trimmed, "event:"))
+			continue
+		}
+		if !strings.HasPrefix(trimmed, "data:") {
+			if trimmed == "" {
+				out = append(out, "")
+			}
+			continue
+		}
+		payload := strings.TrimSpace(strings.TrimPrefix(trimmed, "data:"))
+		if payload == "" || payload == "[DONE]" {
+			continue
+		}
+		var parsed map[string]interface{}
+		if err := json.Unmarshal([]byte(payload), &parsed); err != nil {
+			continue
+		}
+		chunk, done := normalizeAnthropicSSEEventToOpenAIChunk(currentEvent, parsed, toolStates)
+		if !done {
+			continue
+		}
+		encoded, err := json.Marshal(chunk)
+		if err != nil {
+			continue
+		}
+		out = append(out, "data: "+string(encoded), "")
+	}
+	out = append(out, "data: [DONE]", "")
+	return []byte(strings.Join(out, "\n"))
+}
+
+func normalizeAnthropicSSEEventToOpenAIChunk(event string, raw map[string]interface{}, toolStates map[int]*anthropicToolStreamState) (map[string]interface{}, bool) {
+	delta := map[string]interface{}{"role": "assistant"}
+	finishReason := interface{}(nil)
+	switch event {
+	case "content_block_start":
+		index, _ := raw["index"].(float64)
+		block, _ := raw["content_block"].(map[string]interface{})
+		blockType := stringMapValue(block, "type")
+		if blockType == "tool_use" {
+			idx := int(index)
+			state := &anthropicToolStreamState{
+				id:   stringMapValue(block, "id"),
+				name: stringMapValue(block, "name"),
+			}
+			if state.id == "" {
+				state.id = fmt.Sprintf("tool_%d", idx)
+			}
+			toolStates[idx] = state
+			delta["tool_calls"] = []map[string]interface{}{{
+				"index": idx,
+				"id":    state.id,
+				"type":  "function",
+				"function": map[string]interface{}{
+					"name":      state.name,
+					"arguments": "",
+				},
+			}}
+			return openAIChunk(delta, nil), true
+		}
+		return nil, false
+	case "content_block_delta":
+		index, _ := raw["index"].(float64)
+		d, _ := raw["delta"].(map[string]interface{})
+		deltaType := stringMapValue(d, "type")
+		switch deltaType {
+		case "text_delta":
+			text := stringMapValue(d, "text")
+			if text == "" {
+				return nil, false
+			}
+			delta["content"] = text
+			return openAIChunk(delta, nil), true
+		case "input_json_delta":
+			idx := int(index)
+			state := toolStates[idx]
+			if state == nil {
+				state = &anthropicToolStreamState{id: fmt.Sprintf("tool_%d", idx)}
+				toolStates[idx] = state
+			}
+			state.jsonText += stringMapValue(d, "partial_json")
+			delta["tool_calls"] = []map[string]interface{}{{
+				"index": idx,
+				"id":    state.id,
+				"type":  "function",
+				"function": map[string]interface{}{
+					"name":      state.name,
+					"arguments": state.jsonText,
+				},
+			}}
+			return openAIChunk(delta, nil), true
+		}
+	case "message_delta":
+		d, _ := raw["delta"].(map[string]interface{})
+		stopReason := stringMapValue(d, "stop_reason")
+		if stopReason != "" {
+			if stopReason == "tool_use" {
+				finishReason = "tool_calls"
+			} else {
+				finishReason = stopReason
+			}
+			return openAIChunk(map[string]interface{}{}, finishReason), true
+		}
+	case "message_stop":
+		return openAIChunk(map[string]interface{}{}, "stop"), true
+	}
+	return nil, false
+}
+
+func openAIChunk(delta map[string]interface{}, finishReason interface{}) map[string]interface{} {
+	return map[string]interface{}{
+		"id":      "chatcmpl-anthropic-compatible",
+		"object":  "chat.completion.chunk",
+		"created": time.Now().Unix(),
+		"choices": []map[string]interface{}{{
+			"index":         0,
+			"delta":         delta,
+			"finish_reason": finishReason,
+		}},
+	}
+}
 func normalizeGeminiSSEToOpenAI(raw []byte) []byte {
 	lines := strings.Split(string(raw), "\n")
 	out := make([]string, 0, len(lines)+1)
