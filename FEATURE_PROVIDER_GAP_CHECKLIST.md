@@ -104,7 +104,7 @@ Legend: Done = implemented and tested locally; Partial = present but not as broa
 | Image generation | 9router/OmniRoute | Done | `images_test.go`, media resolver | P1 |
 | Image edits | OpenAI-compatible media | Done/Partial | Scoped route exists; deeper provider tests should be expanded | P2 |
 | Audio speech/TTS | 9router/CLIProxyAPI | Done | `voices_test.go`, forwarder media tests | P1 |
-| Audio transcriptions/STT | 9router/CLIProxyAPI | Done/Partial | Scoped route exists; provider breadth needs more testing | P1 |
+| Audio transcriptions/STT | 9router/CLIProxyAPI | Done/Partial | Added direct, `/api/v1`, AssemblyAI flow, and provider-scoped STT tests; broader provider set still partial | P1 |
 | Video generations/edits/extensions | OmniRoute-like extended API | Done/Partial | `video_test.go`, `videoextra_test.go` | P2 |
 | Web search providers | OmniRoute-like helpers | Done/Partial | `websearch_test.go`, Brave/Serper normalization tests | P2 |
 | Fetch/files helper APIs | tool ecosystem | Done | `fetch_test.go`, `files_test.go` | P2 |

@@ -202,6 +202,7 @@ func TestProviderScopedCompatRoutesCoverExtendedEndpoints(t *testing.T) {
 		{name: "responses compact", path: "/api/provider/openai/v1/responses/compact", method: http.MethodPost, body: `{"model":"gpt-4o-mini","input":"hi"}`, upstreamPath: "/responses", kind: "proxy"},
 		{name: "image analyze", path: "/api/provider/openai/images/analyze", method: http.MethodPost, body: `{"model":"gpt-4o-mini","image":"data"}`, upstreamPath: "/v1/chat/completions", kind: "media"},
 		{name: "audio voices", path: "/api/provider/openai/v1/audio/voices", method: http.MethodGet, kind: "voices"},
+		{name: "audio transcriptions", path: "/api/provider/openai/v1/audio/transcriptions", method: http.MethodPost, body: `{"model":"whisper-1"}`, upstreamPath: "/v1/audio/transcriptions", kind: "media"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
