@@ -19,7 +19,7 @@ Legend: Done = implemented and tested locally; Partial = present but not as broa
 | Multimodal text+image | CLIProxyAPI | Done/Partial | Added OpenAI text+data-URL image content translation to Gemini chat payloads; Anthropic path currently preserves text and skips image parts safely | P1 |
 | Streaming pass-through | all 3 | Done/Partial | Added Gemini and Anthropic SSE -> OpenAI `chat.completion.chunk` normalization; other provider streaming parity still needs more tests | P0 |
 | Provider-scoped compat routes `/api/provider/{provider}/...` | CLIProxyAPI | Done/Partial | Added real scoped routing for chat, responses direct/compact, count_tokens, media, search/fetch, voices, models with regression tests in `scoped_test.go` | P1 |
-| Provider-scoped compat routes `/api/v1/providers/{provider}/...` | 9router, CLIProxyAPI | Done/Partial | Registered real route alias and regression tests to avoid falling through to root handler; added `/web/fetch` alias coverage | P1 |
+| Provider-scoped compat routes `/api/v1/providers/{provider}/...` | 9router, CLIProxyAPI | Done/Partial | Registered real route alias and regression tests to avoid falling through to root handler; added `/web/fetch` and `/audio/voices` alias coverage | P1 |
 
 ## Provider coverage
 

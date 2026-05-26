@@ -225,6 +225,7 @@ func TestProviderScopedCompatRoutesCoverExtendedEndpoints(t *testing.T) {
 		{name: "responses direct", path: "/api/provider/openai/v1/responses", method: http.MethodPost, body: `{"model":"gpt-4o-mini","input":"hi"}`, upstreamPath: "/responses", kind: "proxy"},
 		{name: "image analyze", path: "/api/provider/openai/images/analyze", method: http.MethodPost, body: `{"model":"gpt-4o-mini","image":"data"}`, upstreamPath: "/v1/chat/completions", kind: "media"},
 		{name: "audio voices", path: "/api/provider/openai/v1/audio/voices", method: http.MethodGet, kind: "voices"},
+		{name: "audio voices api v1", path: "/api/v1/providers/openai/audio/voices", method: http.MethodGet, kind: "voices"},
 		{name: "audio transcriptions", path: "/api/provider/openai/v1/audio/transcriptions", method: http.MethodPost, body: `{"model":"whisper-1"}`, upstreamPath: "/v1/audio/transcriptions", kind: "media"},
 		{name: "audio generations", path: "/api/provider/openai/v1/audio/generations", method: http.MethodPost, body: `{"model":"gpt-4o-mini-tts","input":"hello"}`, upstreamPath: "/v1/audio/generations", kind: "media"},
 		{name: "audio speech", path: "/api/provider/openai/v1/audio/speech", method: http.MethodPost, body: `{"model":"gpt-4o-mini-tts","input":"hello","voice":"alloy"}`, upstreamPath: "/v1/audio/speech", kind: "media"},
