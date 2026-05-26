@@ -48,3 +48,18 @@ func TestManagementRoutingStrategyRejectsInvalidStrategy(t *testing.T) {
 		t.Fatalf("expected 400, got %d body=%s", rec.Code, rec.Body.String())
 	}
 }
+
+func TestManagementRoutingStrategyAcceptsAutoAndCostOptimized(t *testing.T) {
+	srv := newTestServer(t)
+	for _, strategy := range []string{"auto", "cost_optimized"} {
+		t.Run(strategy, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPatch, "/api/management/routing-strategy", bytes.NewBufferString(`{"comboStrategy":"`+strategy+`"}`))
+			req.Host = "localhost"
+			rec := httptest.NewRecorder()
+			srv.ServeHTTP(rec, req)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
+			}
+		})
+	}
+}

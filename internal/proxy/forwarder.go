@@ -1449,9 +1449,163 @@ func (f *Forwarder) reorderCandidates(scope, model string, candidates []store.Pr
 		sum := sha1.Sum([]byte(scope + "|" + model))
 		offset := weightedFirstIndex(candidates, int(sum[0]))
 		return rotateCandidates(candidates, offset)
+	case "cost_optimized":
+		return sortCandidatesByCost(candidates, model)
+	case "auto":
+		return f.sortCandidatesAuto(candidates, model)
 	default:
 		return candidates
 	}
+}
+
+func sortCandidatesByCost(candidates []store.ProviderConnection, model string) []store.ProviderConnection {
+	out := append([]store.ProviderConnection(nil), candidates...)
+	slices.SortStableFunc(out, func(a, b store.ProviderConnection) int {
+		aCost := providerRouteCost(a, model)
+		bCost := providerRouteCost(b, model)
+		if aCost == bCost {
+			return strings.Compare(a.Provider, b.Provider)
+		}
+		if aCost < bCost {
+			return -1
+		}
+		return 1
+	})
+	return out
+}
+
+func (f *Forwarder) sortCandidatesAuto(candidates []store.ProviderConnection, model string) []store.ProviderConnection {
+	logs := f.store.GetRequestLogs(200)
+	metrics := map[string]providerRouteMetrics{}
+	for _, item := range logs {
+		provider := strings.TrimSpace(item.Provider)
+		if provider == "" {
+			continue
+		}
+		current := metrics[provider]
+		current.requests++
+		if item.StatusCode >= 200 && item.StatusCode < 400 {
+			current.successes++
+		}
+		if item.LatencyMs > 0 {
+			current.latencyTotal += item.LatencyMs
+			current.latencySamples++
+		}
+		metrics[provider] = current
+	}
+	out := append([]store.ProviderConnection(nil), candidates...)
+	slices.SortStableFunc(out, func(a, b store.ProviderConnection) int {
+		aScore := autoRouteScore(a, model, metrics[a.Provider])
+		bScore := autoRouteScore(b, model, metrics[b.Provider])
+		if aScore == bScore {
+			return strings.Compare(a.Provider, b.Provider)
+		}
+		if aScore > bScore {
+			return -1
+		}
+		return 1
+	})
+	return out
+}
+
+type providerRouteMetrics struct {
+	requests       int
+	successes      int
+	latencyTotal   int64
+	latencySamples int
+}
+
+func autoRouteScore(c store.ProviderConnection, model string, metrics providerRouteMetrics) float64 {
+	score := 100.0
+	if c.TestStatus == "unavailable" {
+		score -= 80
+	}
+	if strings.TrimSpace(c.RateLimitedUntil) != "" || strings.TrimSpace(c.CircuitOpenUntil) != "" {
+		score -= 60
+	}
+	if c.BackoffLevel > 0 {
+		score -= float64(c.BackoffLevel) * 10
+	}
+	if metrics.requests > 0 {
+		successRate := float64(metrics.successes) / float64(metrics.requests)
+		score += successRate * 25
+	}
+	if metrics.latencySamples > 0 {
+		avgLatency := float64(metrics.latencyTotal) / float64(metrics.latencySamples)
+		score -= avgLatency / 100
+	}
+	score -= providerRouteCost(c, model) * 1000
+	if c.Priority > 0 {
+		score += float64(100-c.Priority) / 100
+	}
+	return score
+}
+
+func providerRouteCost(c store.ProviderConnection, model string) float64 {
+	data := c.ProviderSpecificData
+	if data == nil {
+		return 0
+	}
+	pricingRaw, ok := data["pricing"].(map[string]interface{})
+	if !ok {
+		return 0
+	}
+	modelName := strings.TrimSpace(model)
+	if strings.HasPrefix(modelName, c.Provider+"/") {
+		modelName = strings.TrimPrefix(modelName, c.Provider+"/")
+	}
+	return estimateProviderCost(pricingRaw, modelName, 1000, 1000)
+}
+
+func estimateProviderCost(pricing map[string]interface{}, model string, promptTokens, completionTokens int64) float64 {
+	if pricing == nil || strings.TrimSpace(model) == "" {
+		return 0
+	}
+	candidates := []string{model}
+	if idx := strings.Index(model, "/"); idx >= 0 && idx+1 < len(model) {
+		candidates = append(candidates, model[idx+1:])
+	}
+	for _, key := range candidates {
+		raw, ok := pricing[key]
+		if !ok {
+			continue
+		}
+		entry, ok := raw.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		promptRate, _ := pricingFloat(entry, "prompt", "promptCostPer1k", "promptCostPer1K", "input", "inputCostPer1k", "inputCostPer1K")
+		completionRate, _ := pricingFloat(entry, "completion", "completionCostPer1k", "completionCostPer1K", "output", "outputCostPer1k", "outputCostPer1K")
+		cost := float64(promptTokens)/1000.0*promptRate + float64(completionTokens)/1000.0*completionRate
+		if cost < 0 {
+			return 0
+		}
+		return cost
+	}
+	return 0
+}
+
+func pricingFloat(entry map[string]interface{}, keys ...string) (float64, bool) {
+	for _, key := range keys {
+		value, ok := entry[key]
+		if !ok {
+			continue
+		}
+		switch v := value.(type) {
+		case float64:
+			return v, true
+		case int:
+			return float64(v), true
+		case int64:
+			return float64(v), true
+		case string:
+			parsed, err := strconv.ParseFloat(v, 64)
+			if err == nil {
+				return parsed, true
+			}
+		}
+	}
+	return 0, false
 }
 
 type SearchRequest struct {

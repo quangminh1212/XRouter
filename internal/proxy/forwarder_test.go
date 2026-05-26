@@ -642,3 +642,41 @@ func TestNormalizeResponseForModeOllamaNDJSON(t *testing.T) {
 		t.Fatalf("unexpected normalized ollama body: %s", string(body))
 	}
 }
+
+func TestReorderCandidatesCostOptimized(t *testing.T) {
+	st, err := store.NewStore()
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	_, _ = st.UpdateSettings(map[string]interface{}{"comboStrategy": "cost_optimized"})
+	f := NewForwarder(st)
+	candidates := []store.ProviderConnection{
+		{Provider: "expensive", ProviderSpecificData: map[string]interface{}{"pricing": map[string]interface{}{"gpt-4o-mini": map[string]interface{}{"promptCostPer1k": 0.010, "completionCostPer1k": 0.020}}}},
+		{Provider: "cheap", ProviderSpecificData: map[string]interface{}{"pricing": map[string]interface{}{"gpt-4o-mini": map[string]interface{}{"promptCostPer1k": 0.001, "completionCostPer1k": 0.002}}}},
+	}
+	got := f.reorderCandidates("scope", "cheap/gpt-4o-mini", candidates)
+	if len(got) != 2 || got[0].Provider != "cheap" {
+		t.Fatalf("expected cheap first, got %#v", got)
+	}
+}
+
+func TestReorderCandidatesAutoPrefersHealthyFastProvider(t *testing.T) {
+	st, err := store.NewStore()
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	_, _ = st.UpdateSettings(map[string]interface{}{"comboStrategy": "auto"})
+	_ = st.RecordRequestLog(store.RequestLog{Provider: "fast", StatusCode: 200, LatencyMs: 80})
+	_ = st.RecordRequestLog(store.RequestLog{Provider: "fast", StatusCode: 200, LatencyMs: 70})
+	_ = st.RecordRequestLog(store.RequestLog{Provider: "slow", StatusCode: 502, LatencyMs: 900})
+	_ = st.RecordRequestLog(store.RequestLog{Provider: "slow", StatusCode: 200, LatencyMs: 800})
+	f := NewForwarder(st)
+	candidates := []store.ProviderConnection{
+		{Provider: "slow"},
+		{Provider: "fast"},
+	}
+	got := f.reorderCandidates("scope", "openai/gpt-4o-mini", candidates)
+	if len(got) != 2 || got[0].Provider != "fast" {
+		t.Fatalf("expected fast first, got %#v", got)
+	}
+}

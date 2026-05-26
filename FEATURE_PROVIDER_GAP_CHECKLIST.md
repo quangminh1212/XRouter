@@ -49,9 +49,9 @@ Legend: Done = implemented and tested locally; Partial = present but not as broa
 | Round-robin account selection | CLIProxyAPI, 9router | Done | `internal/app/weighted_test.go`, settings | P0 |
 | Weighted routing | OmniRoute/CLIProxyAPI-like | Done | `TestWeightedQuotaAwareRoundRobin` | P0 |
 | Sticky round robin | OmniRoute-style strategies | Done/Partial | Strategy endpoint supports sticky; not 14 strategies | P1 |
-| Cost-optimized routing | OmniRoute | Partial/Missing | Cost estimation exists in store tests; no proven full cost optimizer like OmniRoute | P2 |
-| Auto routing / `auto` variants | OmniRoute | Missing/Partial | No evidence of OmniRoute 9-factor Auto-Combo parity | P2 |
-| 14 routing strategies | OmniRoute | Missing | XRouter has fewer strategies | P2 |
+| Cost-optimized routing | OmniRoute | Done/Partial | Added `cost_optimized` candidate ordering using provider-level pricing hints; still much simpler than OmniRoute scoring engine | P2 |
+| Auto routing / `auto` variants | OmniRoute | Done/Partial | Added minimal `auto` ordering based on cooldown status, recent success rate, average latency and pricing hints; not full OmniRoute 9-factor engine | P2 |
+| 14 routing strategies | OmniRoute | Missing | XRouter now supports `fallback`, `round_robin`, `sticky_round_robin`, `cost_optimized`, `auto`, but still far below OmniRoute breadth | P2 |
 | Circuit breaker | OmniRoute | Done/Partial | `internal/store/db_test.go` has circuit tests; parity depth unknown | P1 |
 | Connection cooldown / Retry-After | OmniRoute, 9router | Done | `internal/proxy/forwarder_test.go` cooldown tests | P0 |
 | Model lockout | OmniRoute | Partial | Disabled/excluded/availability models exist, but not exact dynamic lockout parity | P1 |
@@ -180,6 +180,7 @@ Legend: Done = implemented and tested locally; Partial = present but not as broa
 - `go test ./...` pass.
 - `go build ./cmd/xrouter` pass.
 - Smoke server test pass: `/api/health`, `/api/version`, `/api/settings`, `/api/models`, `/api/usage/stats`, `/dashboard`.
+
 
 
 

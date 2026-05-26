@@ -184,6 +184,10 @@ func cliProxyRoutingStrategy(value string) (string, bool) {
 		return "round_robin", true
 	case "fill-first", "fillfirst", "ff", "fallback":
 		return "fallback", true
+	case "cost-optimized", "cost_optimized", "costoptimized", "cheap", "auto/cheap":
+		return "cost_optimized", true
+	case "auto", "smart", "auto/smart":
+		return "auto", true
 	default:
 		return "", false
 	}
