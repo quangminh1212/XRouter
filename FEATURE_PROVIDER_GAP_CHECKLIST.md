@@ -115,7 +115,7 @@ Legend: Done = implemented and tested locally; Partial = present but not as broa
 | Feature | Reference source | XRouter status | Evidence / note | Priority |
 |---|---|---:|---|---:|
 | Require API key setting | all 3 | Done | `/api/settings`, smoke shows `requireApiKey:true` | P0 |
-| Local-only management protection | all 3 | Done/Partial | Several handlers enforce localhost; should audit all sensitive endpoints | P0 |
+| Local-only management protection | all 3 | Done/Partial | Added localhost-only guard for usage/debug endpoints; remaining audit mainly concerns non-management read-only surfaces | P0 |
 | Dashboard login/session | 9router | Partial | `requireLogin` setting exists, but not full 9router NextAuth/session UI parity | P2 |
 | Outbound proxy settings | CLIProxyAPI/9router | Done/Partial | Added `outboundNoProxy` bypass matching for localhost, exact host, suffix and wildcard domains; env parity still partial | P1 |
 | WebSocket relay/gateway | CLIProxyAPI | Done/Partial | Added minimal `/api/v1/ws` websocket relay with ping/pong, `http_request`, `http_response`, `stream_start`, `stream_chunk`, `stream_end`; still not as full-featured as CLIProxyAPI wsrelay manager | P1 |

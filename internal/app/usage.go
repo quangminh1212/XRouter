@@ -362,7 +362,18 @@ func (s *Server) handleVersion(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, payload)
 }
 
+func requireLocalUsageRequest(w http.ResponseWriter, r *http.Request) bool {
+	if isLocalOnlyRequest(r) {
+		return true
+	}
+	writeJSON(w, http.StatusForbidden, map[string]string{"error": "usage api is restricted to localhost"})
+	return false
+}
+
 func (s *Server) handleUsageStats(w http.ResponseWriter, r *http.Request) {
+	if !requireLocalUsageRequest(w, r) {
+		return
+	}
 	if r.Method != http.MethodGet {
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
 		return
@@ -371,6 +382,9 @@ func (s *Server) handleUsageStats(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleUsageLogs(w http.ResponseWriter, r *http.Request) {
+	if !requireLocalUsageRequest(w, r) {
+		return
+	}
 	if r.Method != http.MethodGet {
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
 		return
@@ -389,6 +403,9 @@ func (s *Server) handleUsageLogs(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleUsageStream(w http.ResponseWriter, r *http.Request) {
+	if !requireLocalUsageRequest(w, r) {
+		return
+	}
 	if r.Method != http.MethodGet {
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
 		return
@@ -459,6 +476,9 @@ func (s *Server) handleUsageStream(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleUsageLogByID(w http.ResponseWriter, r *http.Request) {
+	if !requireLocalUsageRequest(w, r) {
+		return
+	}
 	if r.Method != http.MethodGet {
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
 		return
@@ -477,6 +497,9 @@ func (s *Server) handleUsageLogByID(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleUsageHistory(w http.ResponseWriter, r *http.Request) {
+	if !requireLocalUsageRequest(w, r) {
+		return
+	}
 	if r.Method != http.MethodGet {
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
 		return
@@ -497,6 +520,9 @@ func (s *Server) handleUsageHistory(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleDebugDB(w http.ResponseWriter, r *http.Request) {
+	if !requireLocalUsageRequest(w, r) {
+		return
+	}
 	data, err := s.store.DBSnapshot()
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})

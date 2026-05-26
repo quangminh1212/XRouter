@@ -50,6 +50,7 @@ func TestUsageLogsEndpointRecordsProxyRequest(t *testing.T) {
 
 	body := bytes.NewBufferString(`{"model":"openai/gpt-4o-mini","messages":[{"role":"user","content":"hi"}]}`)
 	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", body)
+	req.Host = "localhost"
 	rec := httptest.NewRecorder()
 	srv.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
@@ -57,6 +58,7 @@ func TestUsageLogsEndpointRecordsProxyRequest(t *testing.T) {
 	}
 
 	logReq := httptest.NewRequest(http.MethodGet, "/api/usage/logs?limit=1", nil)
+	logReq.Host = "localhost"
 	logRec := httptest.NewRecorder()
 	srv.ServeHTTP(logRec, logReq)
 	if logRec.Code != http.StatusOK {
@@ -103,6 +105,7 @@ func TestUsageStreamSnapshot(t *testing.T) {
 	}
 
 	req := httptest.NewRequest(http.MethodGet, "/api/usage/stream?once=1&limit=1", nil)
+	req.Host = "localhost"
 	rec := httptest.NewRecorder()
 	srv.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
@@ -117,9 +120,31 @@ func TestUsageStreamSnapshot(t *testing.T) {
 	}
 }
 
+func TestUsageEndpointsRejectNonLocalRequests(t *testing.T) {
+	srv := newTestServer(t)
+	paths := []string{
+		"/api/usage/stats",
+		"/api/usage/logs",
+		"/api/usage/stream?once=1",
+		"/api/usage/logs/missing",
+		"/api/usage/history",
+		"/api/debug/db",
+	}
+	for _, path := range paths {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req.Host = "remote.example.com"
+		rec := httptest.NewRecorder()
+		srv.ServeHTTP(rec, req)
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("%s expected 403, got %d body=%s", path, rec.Code, rec.Body.String())
+		}
+	}
+}
+
 func TestDashboardRendersUsageUI(t *testing.T) {
 	srv := newTestServer(t)
 	req := httptest.NewRequest(http.MethodGet, "/dashboard", nil)
+	req.Host = "localhost"
 	req.Host = "localhost:1213"
 	rec := httptest.NewRecorder()
 	srv.ServeHTTP(rec, req)

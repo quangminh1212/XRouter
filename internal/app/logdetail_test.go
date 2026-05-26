@@ -24,6 +24,7 @@ func TestUsageLogDetailEndpointReturnsItemByID(t *testing.T) {
 	}
 
 	req := httptest.NewRequest(http.MethodGet, "/api/usage/logs/rlog_test_1", nil)
+	req.Host = "localhost"
 	rec := httptest.NewRecorder()
 	srv.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
@@ -42,6 +43,7 @@ func TestUsageLogDetailEndpointReturnsItemByID(t *testing.T) {
 func TestUsageLogDetailEndpointReturns404(t *testing.T) {
 	srv := newTestServer(t)
 	req := httptest.NewRequest(http.MethodGet, "/api/usage/logs/missing", nil)
+	req.Host = "localhost"
 	rec := httptest.NewRecorder()
 	srv.ServeHTTP(rec, req)
 	if rec.Code != http.StatusNotFound {

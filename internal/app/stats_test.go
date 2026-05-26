@@ -23,6 +23,7 @@ func TestUsageStatsEndpointAggregatesUsage(t *testing.T) {
 	}
 
 	req := httptest.NewRequest(http.MethodGet, "/api/usage/stats", nil)
+	req.Host = "localhost"
 	rec := httptest.NewRecorder()
 	srv.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
