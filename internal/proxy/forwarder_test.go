@@ -801,6 +801,22 @@ func TestReorderCandidatesAutoPrefersHealthyFastProvider(t *testing.T) {
 	}
 }
 
+func TestReorderCandidatesAutoPrefersFreshSuccess(t *testing.T) {
+	st, err := store.NewStore()
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	_, _ = st.UpdateSettings(map[string]interface{}{"comboStrategy": "auto"})
+	_ = st.RecordRequestLog(store.RequestLog{Provider: "stale", StatusCode: 200, LatencyMs: 100, Timestamp: time.Now().Add(-6 * time.Hour).UTC().Format(time.RFC3339)})
+	_ = st.RecordRequestLog(store.RequestLog{Provider: "fresh", StatusCode: 200, LatencyMs: 100, Timestamp: time.Now().UTC().Format(time.RFC3339)})
+	f := NewForwarder(st)
+	candidates := []store.ProviderConnection{{Provider: "stale"}, {Provider: "fresh"}}
+	got := f.reorderCandidates("scope", "openai/gpt-4o-mini", candidates)
+	if len(got) != 2 || got[0].Provider != "fresh" {
+		t.Fatalf("expected fresh provider first, got %#v", got)
+	}
+}
+
 func TestReorderCandidatesLastKnownGoodPrefersRecentSuccess(t *testing.T) {
 	st, err := store.NewStore()
 	if err != nil {

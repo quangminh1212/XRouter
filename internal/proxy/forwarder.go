@@ -1610,6 +1610,9 @@ func (f *Forwarder) sortCandidatesAuto(candidates []store.ProviderConnection, mo
 		current.requests++
 		if item.StatusCode >= 200 && item.StatusCode < 400 {
 			current.successes++
+			if ts, err := time.Parse(time.RFC3339, strings.TrimSpace(item.Timestamp)); err == nil && ts.After(current.lastSuccessAt) {
+				current.lastSuccessAt = ts
+			}
 		}
 		if item.LatencyMs > 0 {
 			current.latencyTotal += item.LatencyMs
@@ -1678,6 +1681,26 @@ type providerRouteMetrics struct {
 	successes      int
 	latencyTotal   int64
 	latencySamples int
+	lastSuccessAt  time.Time
+}
+
+func providerRouteFreshnessBonus(lastSuccessAt time.Time) float64 {
+	if lastSuccessAt.IsZero() {
+		return 0
+	}
+	age := time.Since(lastSuccessAt)
+	switch {
+	case age <= 5*time.Minute:
+		return 12
+	case age <= 30*time.Minute:
+		return 8
+	case age <= 2*time.Hour:
+		return 4
+	case age <= 24*time.Hour:
+		return 1
+	default:
+		return 0
+	}
 }
 
 func autoRouteScore(c store.ProviderConnection, model string, metrics providerRouteMetrics) float64 {
@@ -1699,6 +1722,7 @@ func autoRouteScore(c store.ProviderConnection, model string, metrics providerRo
 		avgLatency := float64(metrics.latencyTotal) / float64(metrics.latencySamples)
 		score -= avgLatency / 100
 	}
+	score += providerRouteFreshnessBonus(metrics.lastSuccessAt)
 	score -= providerRouteCost(c, model) * 1000
 	if c.Priority > 0 {
 		score += float64(100-c.Priority) / 100
