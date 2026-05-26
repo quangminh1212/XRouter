@@ -316,6 +316,7 @@ func TestProviderScopedCompatRoutesCoverExtendedEndpoints(t *testing.T) {
 		{name: "video extensions", path: "/api/provider/openai/v1/videos/extensions", method: http.MethodPost, body: `{"model":"gpt-video-1"}`, upstreamPath: "/v1/videos/extensions", kind: "media"},
 		{name: "web fetch", path: "/api/provider/openai/v1/web/fetch", method: http.MethodPost, body: `{"url":"https://example.com"}`, kind: "fetch"},
 		{name: "web fetch api v1", path: "/api/v1/providers/openai/v1/web/fetch", method: http.MethodPost, body: `{"url":"https://example.com"}`, kind: "fetch"},
+		{name: "web search api v1", path: "/api/v1/providers/brave-search/web/search", method: http.MethodPost, body: `{"query":"xrouter","max_results":1}`, upstreamPath: "/web/search", kind: "search"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -336,6 +337,10 @@ func TestProviderScopedCompatRoutesCoverExtendedEndpoints(t *testing.T) {
 				if tt.kind == "proxy" && strings.Contains(tt.path, "/anthropic/") {
 					provider = "anthropic"
 					apiType = "anthropic"
+				}
+				if tt.kind == "search" {
+					provider = "brave-search"
+					apiType = "openai"
 				}
 				_, _ = srv.store.CreateProviderConnection(store.ProviderConnection{
 					Provider: provider, Name: provider + " scoped extended", AuthType: "apikey", APIKey: "x", IsActive: true,
