@@ -128,11 +128,59 @@ func (f *Forwarder) refreshTransport() error {
 		if err != nil {
 			return fmt.Errorf("invalid outbound proxy url: %w", err)
 		}
-		transport.Proxy = http.ProxyURL(proxyURL)
+		transport.Proxy = proxyFunc(proxyURL, settings.OutboundNoProxy)
 	}
 	f.client.Transport = transport
 	f.proxyConfigHash = hash
 	return nil
+}
+
+func proxyFunc(proxyURL *url.URL, noProxy string) func(*http.Request) (*url.URL, error) {
+	matcher := compileNoProxyMatcher(noProxy)
+	return func(req *http.Request) (*url.URL, error) {
+		if req == nil || req.URL == nil {
+			return proxyURL, nil
+		}
+		if matcher(req.URL.Hostname()) {
+			return nil, nil
+		}
+		return proxyURL, nil
+	}
+}
+
+func compileNoProxyMatcher(value string) func(string) bool {
+	patterns := make([]string, 0)
+	for _, item := range strings.Split(value, ",") {
+		item = strings.ToLower(strings.TrimSpace(item))
+		if item == "" {
+			continue
+		}
+		patterns = append(patterns, item)
+	}
+	return func(host string) bool {
+		host = strings.ToLower(strings.TrimSpace(host))
+		if host == "" {
+			return false
+		}
+		for _, pattern := range patterns {
+			trimmed := strings.TrimPrefix(pattern, ".")
+			switch {
+			case pattern == "*":
+				return true
+			case host == trimmed:
+				return true
+			case strings.HasPrefix(pattern, ".") && strings.HasSuffix(host, pattern):
+				return true
+			case strings.HasPrefix(pattern, "*.") && strings.HasSuffix(host, "."+strings.TrimPrefix(pattern, "*.")):
+				return true
+			case strings.Contains(pattern, "/"):
+				continue
+			case strings.HasSuffix(host, "."+trimmed):
+				return true
+			}
+		}
+		return host == "localhost" || host == "127.0.0.1" || host == "::1"
+	}
 }
 
 func resolveEndpoint(c store.ProviderConnection, model, path string) (string, string, error) {

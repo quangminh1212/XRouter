@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -640,6 +642,51 @@ func TestNormalizeResponseForModeOllamaNDJSON(t *testing.T) {
 	}
 	if !strings.Contains(string(body), `"chat.completion"`) {
 		t.Fatalf("unexpected normalized ollama body: %s", string(body))
+	}
+}
+
+func TestCompileNoProxyMatcher(t *testing.T) {
+	matcher := compileNoProxyMatcher("localhost, .internal.example,*.corp.local,api.openai.com")
+	cases := []struct {
+		host string
+		want bool
+	}{
+		{host: "localhost", want: true},
+		{host: "127.0.0.1", want: true},
+		{host: "service.internal.example", want: true},
+		{host: "a.corp.local", want: true},
+		{host: "api.openai.com", want: true},
+		{host: "openai.com", want: false},
+		{host: "example.org", want: false},
+	}
+	for _, tc := range cases {
+		if got := matcher(tc.host); got != tc.want {
+			t.Fatalf("matcher(%q)=%v want %v", tc.host, got, tc.want)
+		}
+	}
+}
+
+func TestProxyFuncBypassesNoProxyHosts(t *testing.T) {
+	proxyURL, err := url.Parse("http://proxy.example.com:8080")
+	if err != nil {
+		t.Fatalf("parse proxy: %v", err)
+	}
+	proxy := proxyFunc(proxyURL, "localhost,.internal.example")
+	bypassReq := httptest.NewRequest(http.MethodGet, "https://api.internal.example/v1/models", nil)
+	got, err := proxy(bypassReq)
+	if err != nil {
+		t.Fatalf("proxy bypass: %v", err)
+	}
+	if got != nil {
+		t.Fatalf("expected nil proxy for bypass host, got %#v", got)
+	}
+	forwardReq := httptest.NewRequest(http.MethodGet, "https://api.openai.com/v1/models", nil)
+	got, err = proxy(forwardReq)
+	if err != nil {
+		t.Fatalf("proxy forward: %v", err)
+	}
+	if got == nil || got.String() != proxyURL.String() {
+		t.Fatalf("expected proxy URL, got %#v", got)
 	}
 }
 

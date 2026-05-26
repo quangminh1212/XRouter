@@ -117,7 +117,7 @@ Legend: Done = implemented and tested locally; Partial = present but not as broa
 | Require API key setting | all 3 | Done | `/api/settings`, smoke shows `requireApiKey:true` | P0 |
 | Local-only management protection | all 3 | Done/Partial | Several handlers enforce localhost; should audit all sensitive endpoints | P0 |
 | Dashboard login/session | 9router | Partial | `requireLogin` setting exists, but not full 9router NextAuth/session UI parity | P2 |
-| Outbound proxy settings | CLIProxyAPI/9router | Done/Partial | Settings include outbound proxy; full env/no_proxy parity should be tested | P1 |
+| Outbound proxy settings | CLIProxyAPI/9router | Done/Partial | Added `outboundNoProxy` bypass matching for localhost, exact host, suffix and wildcard domains; env parity still partial | P1 |
 | WebSocket relay/gateway | CLIProxyAPI | Done/Partial | Added minimal `/api/v1/ws` websocket relay with ping/pong, `http_request`, `http_response`, `stream_start`, `stream_chunk`, `stream_end`; still not as full-featured as CLIProxyAPI wsrelay manager | P1 |
 | Redis usage output/queue | CLIProxyAPI | Missing | No clear Redis queue protocol parity found | P3 |
 | SDK embeddability | CLIProxyAPI | Missing | No public reusable Go SDK package comparable to CLIProxyAPI sdk | P3 |
