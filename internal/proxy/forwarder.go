@@ -655,6 +655,13 @@ func normalizeResponseForMode(resp *http.Response, mode string) (*http.Response,
 		resp.Body = io.NopCloser(bytes.NewReader(raw))
 		return resp, nil
 	}
+	headers := cloneHeader(resp.Header)
+	contentType := strings.ToLower(headers.Get("Content-Type"))
+	if strings.Contains(contentType, "text/event-stream") {
+		body := normalizeGeminiSSEToOpenAI(raw)
+		headers.Set("Content-Type", "text/event-stream")
+		return cloneResponse(resp.StatusCode, headers, body), nil
+	}
 	var payload map[string]interface{}
 	if err := json.Unmarshal(raw, &payload); err != nil {
 		resp.Body = io.NopCloser(bytes.NewReader(raw))
@@ -662,11 +669,99 @@ func normalizeResponseForMode(resp *http.Response, mode string) (*http.Response,
 	}
 	normalized := normalizeGeminiToOpenAIResponse(payload)
 	body, _ := json.Marshal(normalized)
-	headers := cloneHeader(resp.Header)
 	headers.Set("Content-Type", "application/json")
 	return cloneResponse(resp.StatusCode, headers, body), nil
 }
 
+func normalizeGeminiSSEToOpenAI(raw []byte) []byte {
+	lines := strings.Split(string(raw), "\n")
+	out := make([]string, 0, len(lines)+1)
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if !strings.HasPrefix(trimmed, "data:") {
+			if trimmed == "" {
+				out = append(out, "")
+			}
+			continue
+		}
+		payload := strings.TrimSpace(strings.TrimPrefix(trimmed, "data:"))
+		if payload == "" || payload == "[DONE]" {
+			continue
+		}
+		var parsed map[string]interface{}
+		if err := json.Unmarshal([]byte(payload), &parsed); err != nil {
+			out = append(out, line)
+			continue
+		}
+		chunk := normalizeGeminiToOpenAIChunk(parsed)
+		encoded, err := json.Marshal(chunk)
+		if err != nil {
+			continue
+		}
+		out = append(out, "data: "+string(encoded), "")
+	}
+	out = append(out, "data: [DONE]", "")
+	return []byte(strings.Join(out, "\n"))
+}
+
+func normalizeGeminiToOpenAIChunk(raw map[string]interface{}) map[string]interface{} {
+	delta := map[string]interface{}{"role": "assistant"}
+	toolCalls := extractGeminiToolCalls(raw)
+	text := ""
+	finishReason := ""
+	if candidates, ok := raw["candidates"].([]interface{}); ok && len(candidates) > 0 {
+		if candidate, ok := candidates[0].(map[string]interface{}); ok {
+			if v, ok := candidate["finishReason"].(string); ok && strings.TrimSpace(v) != "" {
+				finishReason = strings.ToLower(strings.TrimSpace(v))
+			}
+			if content, ok := candidate["content"].(map[string]interface{}); ok {
+				if parts, ok := content["parts"].([]interface{}); ok {
+					chunks := make([]string, 0, len(parts))
+					for _, rawPart := range parts {
+						part, _ := rawPart.(map[string]interface{})
+						if v, ok := part["text"].(string); ok && strings.TrimSpace(v) != "" {
+							chunks = append(chunks, v)
+						}
+					}
+					text = strings.Join(chunks, "\n")
+				}
+			}
+		}
+	}
+	if text != "" {
+		delta["content"] = text
+	}
+	if len(toolCalls) > 0 {
+		delta["tool_calls"] = toolCalls
+		if finishReason == "" || finishReason == "stop" || finishReason == "function_call" {
+			finishReason = "tool_calls"
+		}
+	}
+	if finishReason == "function_call" {
+		finishReason = "tool_calls"
+	}
+	return map[string]interface{}{
+		"id":      "chatcmpl-gemini-compatible",
+		"object":  "chat.completion.chunk",
+		"created": time.Now().Unix(),
+		"choices": []map[string]interface{}{{
+			"index":         0,
+			"delta":         delta,
+			"finish_reason": normalizeChunkFinishReason(finishReason),
+		}},
+	}
+}
+
+func normalizeChunkFinishReason(reason string) interface{} {
+	reason = strings.TrimSpace(strings.ToLower(reason))
+	if reason == "" {
+		return nil
+	}
+	if reason == "function_call" {
+		return "tool_calls"
+	}
+	return reason
+}
 func normalizeGeminiToOpenAIResponse(raw map[string]interface{}) map[string]interface{} {
 	text := ""
 	finishReason := "stop"

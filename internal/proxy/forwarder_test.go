@@ -3,6 +3,7 @@ package proxy
 import (
 	"bytes"
 	"encoding/json"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -466,5 +467,44 @@ func TestNormalizeOpenAIToAnthropicBodyMultimodalKeepsText(t *testing.T) {
 	msg, _ := messages[0].(map[string]interface{})
 	if msg["content"] != "Describe this image" {
 		t.Fatalf("unexpected anthropic content: %#v", msg)
+	}
+}
+
+func TestNormalizeGeminiSSEToOpenAI(t *testing.T) {
+	raw := []byte("data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"Hello\"}]}}]}\n\ndata: {\"candidates\":[{\"finishReason\":\"STOP\",\"content\":{\"parts\":[{\"text\":\" world\"}]}}]}\n\n")
+	out := string(normalizeGeminiSSEToOpenAI(raw))
+	if !strings.Contains(out, `"object":"chat.completion.chunk"`) {
+		t.Fatalf("expected chunk object, got %s", out)
+	}
+	if !strings.Contains(out, `"content":"Hello"`) {
+		t.Fatalf("expected first content chunk, got %s", out)
+	}
+	if !strings.Contains(out, `"content":" world"`) {
+		t.Fatalf("expected second content chunk, got %s", out)
+	}
+	if !strings.Contains(out, `data: [DONE]`) {
+		t.Fatalf("expected done marker, got %s", out)
+	}
+}
+
+func TestNormalizeResponseForModeGeminiSSE(t *testing.T) {
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"Content-Type": []string{"text/event-stream"}},
+		Body:       io.NopCloser(strings.NewReader("data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"Hi\"}]}}]}\n\n")),
+	}
+	normalized, err := normalizeResponseForMode(resp, "gemini")
+	if err != nil {
+		t.Fatalf("normalize response: %v", err)
+	}
+	body, err := io.ReadAll(normalized.Body)
+	if err != nil {
+		t.Fatalf("read body: %v", err)
+	}
+	if !strings.Contains(string(body), `"chat.completion.chunk"`) {
+		t.Fatalf("unexpected normalized sse body: %s", string(body))
+	}
+	if got := normalized.Header.Get("Content-Type"); !strings.Contains(strings.ToLower(got), "text/event-stream") {
+		t.Fatalf("unexpected content-type: %q", got)
 	}
 }

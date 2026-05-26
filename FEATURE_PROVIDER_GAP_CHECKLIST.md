@@ -17,7 +17,7 @@ Legend: Done = implemented and tested locally; Partial = present but not as broa
 | Ollama format translation | 9router | Missing | 9router has Ollama translator files; no clear XRouter Ollama adapter beyond catalog names | P2 |
 | Function/tool calling pass-through | OmniRoute, CLIProxyAPI | Done/Partial | Added translator coverage for OpenAI tool declarations to Gemini/Anthropic and Gemini function-call response normalization | P1 |
 | Multimodal text+image | CLIProxyAPI | Done/Partial | Added OpenAI text+data-URL image content translation to Gemini chat payloads; Anthropic path currently preserves text and skips image parts safely | P1 |
-| Streaming pass-through | all 3 | Done/Partial | Responses stream alias tested; full SSE transform across all provider schemas needs more tests | P0 |
+| Streaming pass-through | all 3 | Done/Partial | Added Gemini SSE -> OpenAI `chat.completion.chunk` normalization; broader Claude/other provider streaming parity still needs more tests | P0 |
 | Provider-scoped compat routes `/api/provider/{provider}/...` | CLIProxyAPI | Done/Partial | Added real scoped routing for chat, responses compact, count_tokens, media, search/fetch, voices, models with regression tests in `scoped_test.go` | P1 |
 | Provider-scoped compat routes `/api/v1/providers/{provider}/...` | 9router, CLIProxyAPI | Done/Partial | Registered real route alias and regression tests to avoid falling through to root handler | P1 |
 
@@ -180,5 +180,6 @@ Legend: Done = implemented and tested locally; Partial = present but not as broa
 - `go test ./...` pass.
 - `go build ./cmd/xrouter` pass.
 - Smoke server test pass: `/api/health`, `/api/version`, `/api/settings`, `/api/models`, `/api/usage/stats`, `/dashboard`.
+
 
 
