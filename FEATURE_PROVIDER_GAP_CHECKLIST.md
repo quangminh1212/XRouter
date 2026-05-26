@@ -12,10 +12,10 @@ Legend: Done = implemented and tested locally; Partial = present but not as broa
 | OpenAI Responses `/v1/responses` | OmniRoute, CLIProxyAPI | Done | `internal/app/stream_test.go`, `README.md` | P0 |
 | `/v1/responses/stream` alias | CLIProxyAPI-like CLI compatibility | Done | `internal/app/stream_test.go` | P1 |
 | Gemini-compatible forwarding | 9router, CLIProxyAPI | Done | `internal/proxy/forwarder_test.go`, `internal/app/gemini_test.go` | P0 |
-| OpenAI <-> Gemini body transform | 9router, CLIProxyAPI | Partial | Gemini request normalization exists, but not full bidirectional translator parity | P1 |
-| OpenAI <-> Claude body transform | 9router, CLIProxyAPI | Partial | Claude/Anthropic compatible paths exist, but full streaming/tool translator parity needs more audit | P1 |
+| OpenAI <-> Gemini body transform | 9router, CLIProxyAPI | Done/Partial | Added request-side tools mapping and response-side Gemini `functionCall` -> OpenAI `tool_calls`; multimodal/image parts still need broader coverage | P1 |
+| OpenAI <-> Claude body transform | 9router, CLIProxyAPI | Done/Partial | Added OpenAI tools -> Anthropic tools mapping; broader multimodal/stream parity still needs more audit | P1 |
 | Ollama format translation | 9router | Missing | 9router has Ollama translator files; no clear XRouter Ollama adapter beyond catalog names | P2 |
-| Function/tool calling pass-through | OmniRoute, CLIProxyAPI | Partial | Proxy likely forwards JSON, but dedicated cross-format tool translation parity not proven | P1 |
+| Function/tool calling pass-through | OmniRoute, CLIProxyAPI | Done/Partial | Added translator coverage for OpenAI tool declarations to Gemini/Anthropic and Gemini function-call response normalization | P1 |
 | Multimodal text+image | CLIProxyAPI | Partial | Image endpoints exist; multimodal chat transformation parity not fully proven | P1 |
 | Streaming pass-through | all 3 | Done/Partial | Responses stream alias tested; full SSE transform across all provider schemas needs more tests | P0 |
 | Provider-scoped compat routes `/api/provider/{provider}/...` | CLIProxyAPI | Done/Partial | Added real scoped routing for chat, responses compact, count_tokens, media, search/fetch, voices, models with regression tests in `scoped_test.go` | P1 |
@@ -180,3 +180,4 @@ Legend: Done = implemented and tested locally; Partial = present but not as broa
 - `go test ./...` pass.
 - `go build ./cmd/xrouter` pass.
 - Smoke server test pass: `/api/health`, `/api/version`, `/api/settings`, `/api/models`, `/api/usage/stats`, `/dashboard`.
+

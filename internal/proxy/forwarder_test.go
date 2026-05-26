@@ -295,3 +295,111 @@ func TestOAuthRefreshConfig(t *testing.T) {
 		t.Fatalf("unexpected refresh config: %s %s %s", tokenURL, clientID, clientSecret)
 	}
 }
+
+func TestNormalizeOpenAIToGeminiBodyIncludesTools(t *testing.T) {
+	body := map[string]interface{}{
+		"model":    "gemini-compatible/gemini-1.5-flash",
+		"messages": []interface{}{map[string]interface{}{"role": "user", "content": "weather?"}},
+		"tools": []interface{}{map[string]interface{}{
+			"type": "function",
+			"function": map[string]interface{}{
+				"name":        "get_weather",
+				"description": "Get weather by city",
+				"parameters": map[string]interface{}{
+					"type": "object",
+					"properties": map[string]interface{}{
+						"city": map[string]interface{}{"type": "string"},
+					},
+				},
+			},
+		}},
+	}
+	raw := normalizeOpenAIToGeminiBody(body, "gemini-compatible")
+	var out map[string]interface{}
+	if err := json.Unmarshal(raw, &out); err != nil {
+		t.Fatalf("decode transformed body: %v", err)
+	}
+	tools, ok := out["tools"].([]interface{})
+	if !ok || len(tools) != 1 {
+		t.Fatalf("unexpected gemini tools: %#v", out["tools"])
+	}
+	tool, _ := tools[0].(map[string]interface{})
+	decls, ok := tool["functionDeclarations"].([]interface{})
+	if !ok || len(decls) != 1 {
+		t.Fatalf("unexpected function declarations: %#v", tool)
+	}
+	decl, _ := decls[0].(map[string]interface{})
+	if decl["name"] != "get_weather" {
+		t.Fatalf("unexpected declaration: %#v", decl)
+	}
+}
+
+func TestNormalizeOpenAIToAnthropicBodyIncludesTools(t *testing.T) {
+	body := map[string]interface{}{
+		"model":    "anthropic-compatible/claude-3-5-sonnet-20241022",
+		"messages": []interface{}{map[string]interface{}{"role": "user", "content": "weather?"}},
+		"tools": []interface{}{map[string]interface{}{
+			"type": "function",
+			"function": map[string]interface{}{
+				"name":        "get_weather",
+				"description": "Get weather by city",
+				"parameters": map[string]interface{}{
+					"type": "object",
+					"properties": map[string]interface{}{
+						"city": map[string]interface{}{"type": "string"},
+					},
+				},
+			},
+		}},
+	}
+	raw := normalizeOpenAIToAnthropicBody(body, "anthropic-compatible")
+	var out map[string]interface{}
+	if err := json.Unmarshal(raw, &out); err != nil {
+		t.Fatalf("decode transformed body: %v", err)
+	}
+	tools, ok := out["tools"].([]interface{})
+	if !ok || len(tools) != 1 {
+		t.Fatalf("unexpected anthropic tools: %#v", out["tools"])
+	}
+	tool, _ := tools[0].(map[string]interface{})
+	if tool["name"] != "get_weather" {
+		t.Fatalf("unexpected anthropic tool: %#v", tool)
+	}
+	if _, ok := tool["input_schema"].(map[string]interface{}); !ok {
+		t.Fatalf("missing input_schema: %#v", tool)
+	}
+}
+
+func TestNormalizeGeminiToOpenAIResponseToolCall(t *testing.T) {
+	raw := map[string]interface{}{
+		"candidates": []interface{}{map[string]interface{}{
+			"finishReason": "FUNCTION_CALL",
+			"content": map[string]interface{}{
+				"parts": []interface{}{map[string]interface{}{
+					"functionCall": map[string]interface{}{
+						"id":   "call_weather_1",
+						"name": "get_weather",
+						"args": map[string]interface{}{"city": "Hanoi"},
+					},
+				}},
+			},
+		}},
+	}
+	out := normalizeGeminiToOpenAIResponse(raw)
+	choices, ok := out["choices"].([]map[string]interface{})
+	if !ok || len(choices) != 1 {
+		t.Fatalf("unexpected choices: %#v", out)
+	}
+	msg, _ := choices[0]["message"].(map[string]interface{})
+	calls, ok := msg["tool_calls"].([]map[string]interface{})
+	if !ok || len(calls) != 1 {
+		t.Fatalf("unexpected tool calls: %#v", msg)
+	}
+	fn, _ := calls[0]["function"].(map[string]interface{})
+	if fn["name"] != "get_weather" || !strings.Contains(fn["arguments"].(string), "Hanoi") {
+		t.Fatalf("unexpected tool call function payload: %#v", fn)
+	}
+	if choices[0]["finish_reason"] != "tool_calls" {
+		t.Fatalf("unexpected finish reason: %#v", choices[0]["finish_reason"])
+	}
+}

@@ -477,6 +477,9 @@ func normalizeOpenAIToAnthropicBody(body map[string]interface{}, providerHint st
 			out["system"] = strings.Join(systemChunks, "\n\n")
 		}
 	}
+	if tools := normalizeOpenAIToolsForAnthropic(body["tools"]); len(tools) > 0 {
+		out["tools"] = tools
+	}
 	raw, _ := json.Marshal(out)
 	return raw
 }
@@ -506,6 +509,9 @@ func normalizeOpenAIToGeminiBody(body map[string]interface{}, providerHint strin
 		}
 	}
 	out := map[string]interface{}{}
+	if tools := normalizeOpenAIToolsForGemini(body["tools"]); len(tools) > 0 {
+		out["tools"] = tools
+	}
 	if messages, ok := body["messages"].([]interface{}); ok {
 		contents := make([]map[string]interface{}, 0, len(messages))
 		systemParts := make([]map[string]string, 0)
@@ -617,21 +623,136 @@ func normalizeGeminiToOpenAIResponse(raw map[string]interface{}) map[string]inte
 			}
 		}
 	}
+	message := map[string]interface{}{
+		"role":    "assistant",
+		"content": text,
+	}
+	toolCalls := extractGeminiToolCalls(raw)
+	if len(toolCalls) > 0 {
+		message["tool_calls"] = toolCalls
+		if strings.TrimSpace(text) == "" {
+			message["content"] = nil
+		}
+		if finishReason == "stop" || finishReason == "function_call" {
+			finishReason = "tool_calls"
+		}
+	}
 	return map[string]interface{}{
 		"id":      "chatcmpl-gemini-compatible",
 		"object":  "chat.completion",
 		"created": time.Now().Unix(),
 		"choices": []map[string]interface{}{
 			{
-				"index": 0,
-				"message": map[string]string{
-					"role":    "assistant",
-					"content": text,
-				},
+				"index":         0,
+				"message":       message,
 				"finish_reason": finishReason,
 			},
 		},
 	}
+}
+
+func normalizeOpenAIToolsForGemini(rawTools interface{}) []map[string]interface{} {
+	declarations := extractOpenAIFunctionDeclarations(rawTools)
+	if len(declarations) == 0 {
+		return nil
+	}
+	return []map[string]interface{}{{"functionDeclarations": declarations}}
+}
+
+func normalizeOpenAIToolsForAnthropic(rawTools interface{}) []map[string]interface{} {
+	declarations := extractOpenAIFunctionDeclarations(rawTools)
+	if len(declarations) == 0 {
+		return nil
+	}
+	out := make([]map[string]interface{}, 0, len(declarations))
+	for _, decl := range declarations {
+		out = append(out, map[string]interface{}{
+			"name":         decl["name"],
+			"description":  decl["description"],
+			"input_schema": decl["parameters"],
+		})
+	}
+	return out
+}
+
+func extractOpenAIFunctionDeclarations(rawTools interface{}) []map[string]interface{} {
+	items, ok := rawTools.([]interface{})
+	if !ok {
+		return nil
+	}
+	out := make([]map[string]interface{}, 0, len(items))
+	for _, rawTool := range items {
+		tool, _ := rawTool.(map[string]interface{})
+		if strings.ToLower(strings.TrimSpace(fmt.Sprint(tool["type"]))) != "function" {
+			continue
+		}
+		fn, _ := tool["function"].(map[string]interface{})
+		name := stringMapValue(fn, "name")
+		if name == "" {
+			continue
+		}
+		decl := map[string]interface{}{"name": name}
+		if description := stringMapValue(fn, "description"); description != "" {
+			decl["description"] = description
+		}
+		if parameters, ok := fn["parameters"]; ok {
+			decl["parameters"] = parameters
+		}
+		out = append(out, decl)
+	}
+	return out
+}
+
+func stringMapValue(values map[string]interface{}, key string) string {
+	if values == nil {
+		return ""
+	}
+	value, ok := values[key]
+	if !ok || value == nil {
+		return ""
+	}
+	return strings.TrimSpace(fmt.Sprint(value))
+}
+func extractGeminiToolCalls(raw map[string]interface{}) []map[string]interface{} {
+	candidates, ok := raw["candidates"].([]interface{})
+	if !ok || len(candidates) == 0 {
+		return nil
+	}
+	candidate, _ := candidates[0].(map[string]interface{})
+	content, _ := candidate["content"].(map[string]interface{})
+	parts, ok := content["parts"].([]interface{})
+	if !ok {
+		return nil
+	}
+	out := make([]map[string]interface{}, 0)
+	for i, rawPart := range parts {
+		part, _ := rawPart.(map[string]interface{})
+		call, _ := part["functionCall"].(map[string]interface{})
+		name := stringMapValue(call, "name")
+		if name == "" {
+			continue
+		}
+		argsRaw := call["args"]
+		argsJSON := "{}"
+		if argsRaw != nil {
+			if encoded, err := json.Marshal(argsRaw); err == nil {
+				argsJSON = string(encoded)
+			}
+		}
+		callID := stringMapValue(call, "id")
+		if callID == "" {
+			callID = fmt.Sprintf("call_%d", i+1)
+		}
+		out = append(out, map[string]interface{}{
+			"id":   callID,
+			"type": "function",
+			"function": map[string]interface{}{
+				"name":      name,
+				"arguments": argsJSON,
+			},
+		})
+	}
+	return out
 }
 
 func cloneRequestBody(body map[string]interface{}) map[string]interface{} {
