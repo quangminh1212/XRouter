@@ -167,6 +167,28 @@ func TestAPIV1ProviderScopedEmbeddingsCompatRoute(t *testing.T) {
 	}
 }
 
+func TestAPIProviderScopedModelsCompatRoute(t *testing.T) {
+	srv := newTestServer(t)
+	if _, err := srv.store.UpdateSettings(map[string]interface{}{"requireApiKey": false}); err != nil {
+		t.Fatalf("disable api key auth: %v", err)
+	}
+	req := httptest.NewRequest(http.MethodGet, "/api/provider/openai/models", nil)
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	var payload struct {
+		Models []map[string]string `json:"models"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(payload.Models) == 0 {
+		t.Fatalf("expected models payload, got %s", rec.Body.String())
+	}
+}
+
 func TestAPIV1ProviderScopedModelsCompatRoute(t *testing.T) {
 	srv := newTestServer(t)
 	if _, err := srv.store.UpdateSettings(map[string]interface{}{"requireApiKey": false}); err != nil {
