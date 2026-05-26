@@ -118,7 +118,7 @@ Legend: Done = implemented and tested locally; Partial = present but not as broa
 | Local-only management protection | all 3 | Done/Partial | Several handlers enforce localhost; should audit all sensitive endpoints | P0 |
 | Dashboard login/session | 9router | Partial | `requireLogin` setting exists, but not full 9router NextAuth/session UI parity | P2 |
 | Outbound proxy settings | CLIProxyAPI/9router | Done/Partial | Settings include outbound proxy; full env/no_proxy parity should be tested | P1 |
-| WebSocket relay/gateway | CLIProxyAPI | Missing/Partial | Setting `ws-auth` exists, but no clear gorilla websocket relay equivalent | P1 |
+| WebSocket relay/gateway | CLIProxyAPI | Done/Partial | Added minimal `/api/v1/ws` websocket relay with ping/pong, `http_request`, `http_response`, `stream_start`, `stream_chunk`, `stream_end`; still not as full-featured as CLIProxyAPI wsrelay manager | P1 |
 | Redis usage output/queue | CLIProxyAPI | Missing | No clear Redis queue protocol parity found | P3 |
 | SDK embeddability | CLIProxyAPI | Missing | No public reusable Go SDK package comparable to CLIProxyAPI sdk | P3 |
 | Docker/self-host docs | all 3 | Partial/Missing | Release/CI exists; Docker parity not seen in README | P3 |
@@ -180,6 +180,7 @@ Legend: Done = implemented and tested locally; Partial = present but not as broa
 - `go test ./...` pass.
 - `go build ./cmd/xrouter` pass.
 - Smoke server test pass: `/api/health`, `/api/version`, `/api/settings`, `/api/models`, `/api/usage/stats`, `/dashboard`.
+
 
 
 

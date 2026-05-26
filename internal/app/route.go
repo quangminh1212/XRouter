@@ -188,7 +188,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/v1/models", s.handleModels)
 	s.mux.HandleFunc("/api/v1/agents/tasks", s.handleCloudAgentTasks)
 	s.mux.HandleFunc("/api/v1/agents/tasks/", s.handleCloudAgentTaskByID)
-	s.mux.HandleFunc("/api/v1/ws", s.handleProxy)
+	s.mux.HandleFunc("/api/v1/ws", s.handleWebsocketProxy)
 	s.mux.HandleFunc("/api/v1beta/models", s.handleModels)
 	s.mux.HandleFunc("/api/v1beta/models/", s.handleGeminiAction)
 	s.mux.HandleFunc("/api/v1/providers/", s.handleProviderScopedProxy)
