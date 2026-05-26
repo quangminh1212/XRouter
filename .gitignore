@@ -3,8 +3,7 @@
 /xrouter.exe
 /dist/
 /build/
-/.tmp-data/
-/.tmp-data-*/
+/tmp/
 *.test
 *.test.exe
 
@@ -13,7 +12,7 @@
 *.log
 
 # Reference clones used during audits
-/.refs/
+/refs/
 
 # OS / IDE
 .DS_Store
