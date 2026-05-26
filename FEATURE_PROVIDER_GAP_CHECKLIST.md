@@ -133,7 +133,7 @@ Legend: Done = implemented and tested locally; Partial = present but not as broa
 |---|---|---:|---|---:|
 | RTK compression | OmniRoute | Missing | No implementation found | P3 |
 | Caveman compression | OmniRoute | Missing | No implementation found | P3 |
-| Automatic token-saving pipeline | OmniRoute | Missing/Partial | No dedicated compression pipeline; usage stats only | P3 |
+| Automatic token-saving pipeline | OmniRoute | Done/Partial | Added opt-in request compaction via `/compact` paths or `xrouter_compact`; not full OmniRoute RTK/Caveman | P3 |
 | Context relay / context optimized routing | OmniRoute | Missing | No evidence of context handoff strategy | P3 |
 | Last-known-good-provider routing | OmniRoute | Missing/Partial | Sticky routing exists; LKGP scoring not proven | P2 |
 | Latency/success/freshness scoring | OmniRoute | Partial | Metrics exist; no full auto-score engine found | P2 |

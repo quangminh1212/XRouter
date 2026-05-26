@@ -680,3 +680,38 @@ func TestReorderCandidatesAutoPrefersHealthyFastProvider(t *testing.T) {
 		t.Fatalf("expected fast first, got %#v", got)
 	}
 }
+
+func TestCompactRequestBodyOptIn(t *testing.T) {
+	body := map[string]interface{}{
+		"xrouter_compact": true,
+		"messages": []interface{}{map[string]interface{}{
+			"role":              "user",
+			"content":           " hello\t\t world  \n\n\n  from   xrouter ",
+			"reasoning_content": strings.Repeat("think ", 300),
+		}},
+	}
+	out := compactRequestBody("/v1/chat/completions", body)
+	if _, ok := out["xrouter_compact"]; ok {
+		t.Fatalf("xrouter_compact should be removed: %#v", out)
+	}
+	messages := out["messages"].([]interface{})
+	msg := messages[0].(map[string]interface{})
+	if msg["content"] != "hello world\n\nfrom xrouter" {
+		t.Fatalf("unexpected compacted content: %#v", msg["content"])
+	}
+	if len(msg["reasoning_content"].(string)) > 600 {
+		t.Fatalf("reasoning content was not capped")
+	}
+}
+
+func TestCompactRequestBodyOnlyWhenRequested(t *testing.T) {
+	body := map[string]interface{}{
+		"messages": []interface{}{map[string]interface{}{"role": "user", "content": "hello\t world"}},
+	}
+	out := compactRequestBody("/v1/chat/completions", body)
+	messages := out["messages"].([]interface{})
+	msg := messages[0].(map[string]interface{})
+	if msg["content"] != "hello\t world" {
+		t.Fatalf("content should not compact without opt-in: %#v", msg["content"])
+	}
+}

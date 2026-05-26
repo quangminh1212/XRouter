@@ -2388,6 +2388,109 @@ func (f *Forwarder) ForwardMedia(ctx context.Context, request MediaRequest) (*ht
 	return nil, lastErr
 }
 
+func compactRequestBody(path string, body map[string]interface{}) map[string]interface{} {
+	if body == nil {
+		return body
+	}
+	compact := shouldCompactRequest(path, body)
+	delete(body, "xrouter_compact")
+	if !compact {
+		return body
+	}
+	if messages, ok := body["messages"].([]interface{}); ok {
+		body["messages"] = compactMessages(messages)
+	}
+	if input, ok := body["input"].(string); ok {
+		body["input"] = compactText(input)
+	}
+	if instructions, ok := body["instructions"].(string); ok {
+		body["instructions"] = compactText(instructions)
+	}
+	return body
+}
+
+func shouldCompactRequest(path string, body map[string]interface{}) bool {
+	if strings.Contains(path, "/compact") {
+		return true
+	}
+	if v, ok := body["xrouter_compact"].(bool); ok {
+		return v
+	}
+	return false
+}
+
+func compactMessages(messages []interface{}) []interface{} {
+	out := make([]interface{}, 0, len(messages))
+	for _, raw := range messages {
+		msg, ok := raw.(map[string]interface{})
+		if !ok {
+			out = append(out, raw)
+			continue
+		}
+		next := cloneRequestBody(msg)
+		next["content"] = compactMessageContent(next["content"])
+		if reasoning, ok := next["reasoning_content"].(string); ok {
+			next["reasoning_content"] = compactLongText(reasoning, 600)
+		}
+		out = append(out, next)
+	}
+	return out
+}
+
+func compactMessageContent(content interface{}) interface{} {
+	switch value := content.(type) {
+	case string:
+		return compactLongText(value, 4000)
+	case []interface{}:
+		out := make([]interface{}, 0, len(value))
+		for _, rawPart := range value {
+			part, ok := rawPart.(map[string]interface{})
+			if !ok {
+				out = append(out, rawPart)
+				continue
+			}
+			next := cloneRequestBody(part)
+			if text, ok := next["text"].(string); ok {
+				next["text"] = compactLongText(text, 3000)
+			}
+			out = append(out, next)
+		}
+		return out
+	default:
+		return content
+	}
+}
+
+func compactLongText(value string, maxLen int) string {
+	value = compactText(value)
+	if maxLen > 0 && len(value) > maxLen {
+		return strings.TrimSpace(value[:maxLen])
+	}
+	return value
+}
+
+func compactText(value string) string {
+	value = strings.ReplaceAll(value, "\r\n", "\n")
+	value = strings.ReplaceAll(value, "\t", " ")
+	lines := strings.Split(value, "\n")
+	clean := make([]string, 0, len(lines))
+	blank := false
+	for _, line := range lines {
+		line = strings.Join(strings.Fields(strings.TrimSpace(line)), " ")
+		if line == "" {
+			if blank {
+				continue
+			}
+			blank = true
+			clean = append(clean, "")
+			continue
+		}
+		blank = false
+		clean = append(clean, line)
+	}
+	return strings.TrimSpace(strings.Join(clean, "\n"))
+}
+
 func mediaAPIType(path string) string {
 	switch path {
 	case "/v1/embeddings":
@@ -2948,6 +3051,7 @@ func (f *Forwarder) Forward(ctx context.Context, scope, path string, requestBody
 		return nil, fmt.Errorf("invalid json: %w", err)
 	}
 
+	body = compactRequestBody(path, body)
 	model := extractModel(body)
 	if targets, ok := f.store.GetComboModelsMap()[model]; ok && len(targets) > 0 {
 		var lastErr error
