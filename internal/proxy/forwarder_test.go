@@ -403,3 +403,68 @@ func TestNormalizeGeminiToOpenAIResponseToolCall(t *testing.T) {
 		t.Fatalf("unexpected finish reason: %#v", choices[0]["finish_reason"])
 	}
 }
+
+func TestNormalizeOpenAIToGeminiBodyMultimodalImageDataURL(t *testing.T) {
+	body := map[string]interface{}{
+		"model": "gemini-compatible/gemini-1.5-flash",
+		"messages": []interface{}{
+			map[string]interface{}{
+				"role": "user",
+				"content": []interface{}{
+					map[string]interface{}{"type": "text", "text": "Describe this image"},
+					map[string]interface{}{"type": "image_url", "image_url": map[string]interface{}{"url": "data:image/png;base64,aGVsbG8="}},
+				},
+			},
+		},
+	}
+	raw := normalizeOpenAIToGeminiBody(body, "gemini-compatible")
+	var out map[string]interface{}
+	if err := json.Unmarshal(raw, &out); err != nil {
+		t.Fatalf("decode transformed body: %v", err)
+	}
+	contents, ok := out["contents"].([]interface{})
+	if !ok || len(contents) != 1 {
+		t.Fatalf("unexpected contents: %#v", out)
+	}
+	content, _ := contents[0].(map[string]interface{})
+	parts, ok := content["parts"].([]interface{})
+	if !ok || len(parts) != 2 {
+		t.Fatalf("unexpected parts: %#v", content)
+	}
+	imagePart, _ := parts[1].(map[string]interface{})
+	inlineData, ok := imagePart["inline_data"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("missing inline_data: %#v", imagePart)
+	}
+	if inlineData["mime_type"] != "image/png" || inlineData["data"] != "aGVsbG8=" {
+		t.Fatalf("unexpected inline_data: %#v", inlineData)
+	}
+}
+
+func TestNormalizeOpenAIToAnthropicBodyMultimodalKeepsText(t *testing.T) {
+	body := map[string]interface{}{
+		"model": "anthropic-compatible/claude-3-5-sonnet-20241022",
+		"messages": []interface{}{
+			map[string]interface{}{
+				"role": "user",
+				"content": []interface{}{
+					map[string]interface{}{"type": "text", "text": "Describe this image"},
+					map[string]interface{}{"type": "image_url", "image_url": map[string]interface{}{"url": "data:image/png;base64,aGVsbG8="}},
+				},
+			},
+		},
+	}
+	raw := normalizeOpenAIToAnthropicBody(body, "anthropic-compatible")
+	var out map[string]interface{}
+	if err := json.Unmarshal(raw, &out); err != nil {
+		t.Fatalf("decode transformed body: %v", err)
+	}
+	messages, ok := out["messages"].([]interface{})
+	if !ok || len(messages) != 1 {
+		t.Fatalf("unexpected messages: %#v", out)
+	}
+	msg, _ := messages[0].(map[string]interface{})
+	if msg["content"] != "Describe this image" {
+		t.Fatalf("unexpected anthropic content: %#v", msg)
+	}
+}

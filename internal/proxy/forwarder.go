@@ -485,21 +485,100 @@ func normalizeOpenAIToAnthropicBody(body map[string]interface{}, providerHint st
 }
 
 func extractMessageText(content interface{}) string {
+	chunks := extractOpenAITextParts(content)
+	return strings.Join(chunks, "\n")
+}
+
+func extractOpenAITextParts(content interface{}) []string {
 	switch value := content.(type) {
 	case string:
-		return strings.TrimSpace(value)
+		text := strings.TrimSpace(value)
+		if text == "" {
+			return nil
+		}
+		return []string{text}
 	case []interface{}:
 		chunks := make([]string, 0, len(value))
 		for _, rawPart := range value {
 			part, _ := rawPart.(map[string]interface{})
-			if text, ok := part["text"].(string); ok && strings.TrimSpace(text) != "" {
-				chunks = append(chunks, strings.TrimSpace(text))
+			partType := strings.ToLower(strings.TrimSpace(fmt.Sprint(part["type"])))
+			switch partType {
+			case "text", "input_text", "":
+				if text, ok := part["text"].(string); ok && strings.TrimSpace(text) != "" {
+					chunks = append(chunks, strings.TrimSpace(text))
+				}
 			}
 		}
-		return strings.Join(chunks, "\n")
+		return chunks
 	default:
-		return ""
+		return nil
 	}
+}
+
+func normalizeOpenAIContentPartsForGemini(content interface{}) []map[string]interface{} {
+	switch value := content.(type) {
+	case string:
+		text := strings.TrimSpace(value)
+		if text == "" {
+			return nil
+		}
+		return []map[string]interface{}{{"text": text}}
+	case []interface{}:
+		parts := make([]map[string]interface{}, 0, len(value))
+		for _, rawPart := range value {
+			part, _ := rawPart.(map[string]interface{})
+			partType := strings.ToLower(strings.TrimSpace(fmt.Sprint(part["type"])))
+			switch partType {
+			case "text", "input_text", "":
+				if text, ok := part["text"].(string); ok && strings.TrimSpace(text) != "" {
+					parts = append(parts, map[string]interface{}{"text": strings.TrimSpace(text)})
+				}
+			case "image_url", "input_image":
+				if imagePart, ok := normalizeOpenAIImagePartForGemini(part); ok {
+					parts = append(parts, imagePart)
+				}
+			}
+		}
+		return parts
+	default:
+		return nil
+	}
+}
+
+func normalizeOpenAIImagePartForGemini(part map[string]interface{}) (map[string]interface{}, bool) {
+	rawURL := ""
+	if imageURL, ok := part["image_url"].(string); ok {
+		rawURL = strings.TrimSpace(imageURL)
+	} else if imageURL, ok := part["image_url"].(map[string]interface{}); ok {
+		rawURL = strings.TrimSpace(fmt.Sprint(imageURL["url"]))
+	}
+	if rawURL == "" {
+		return nil, false
+	}
+	const prefix = "data:"
+	if !strings.HasPrefix(strings.ToLower(rawURL), prefix) {
+		return nil, false
+	}
+	comma := strings.Index(rawURL, ",")
+	if comma <= len(prefix) {
+		return nil, false
+	}
+	header := rawURL[len(prefix):comma]
+	data := strings.TrimSpace(rawURL[comma+1:])
+	mimeType := header
+	if semi := strings.Index(header, ";"); semi >= 0 {
+		mimeType = header[:semi]
+	}
+	mimeType = strings.TrimSpace(mimeType)
+	if mimeType == "" || data == "" {
+		return nil, false
+	}
+	return map[string]interface{}{
+		"inline_data": map[string]interface{}{
+			"mime_type": mimeType,
+			"data":      data,
+		},
+	}, true
 }
 
 func normalizeOpenAIToGeminiBody(body map[string]interface{}, providerHint string) []byte {
@@ -514,7 +593,7 @@ func normalizeOpenAIToGeminiBody(body map[string]interface{}, providerHint strin
 	}
 	if messages, ok := body["messages"].([]interface{}); ok {
 		contents := make([]map[string]interface{}, 0, len(messages))
-		systemParts := make([]map[string]string, 0)
+		systemParts := make([]map[string]interface{}, 0)
 		for _, raw := range messages {
 			item, _ := raw.(map[string]interface{})
 			roleRaw := ""
@@ -529,20 +608,7 @@ func normalizeOpenAIToGeminiBody(body map[string]interface{}, providerHint strin
 			case "system", "developer":
 				isSystem = true
 			}
-			parts := make([]map[string]string, 0, 1)
-			switch content := item["content"].(type) {
-			case string:
-				if strings.TrimSpace(content) != "" {
-					parts = append(parts, map[string]string{"text": content})
-				}
-			case []interface{}:
-				for _, rawPart := range content {
-					part, _ := rawPart.(map[string]interface{})
-					if text, ok := part["text"].(string); ok && strings.TrimSpace(text) != "" {
-						parts = append(parts, map[string]string{"text": text})
-					}
-				}
-			}
+			parts := normalizeOpenAIContentPartsForGemini(item["content"])
 			if len(parts) == 0 {
 				continue
 			}
@@ -559,7 +625,7 @@ func normalizeOpenAIToGeminiBody(body map[string]interface{}, providerHint strin
 	}
 	if v, ok := body["system"].(string); ok && strings.TrimSpace(v) != "" {
 		if _, exists := out["systemInstruction"]; !exists {
-			out["systemInstruction"] = map[string]interface{}{"role": "user", "parts": []map[string]string{{"text": v}}}
+			out["systemInstruction"] = map[string]interface{}{"role": "user", "parts": []map[string]interface{}{{"text": v}}}
 		}
 	}
 	cfg := map[string]interface{}{}
