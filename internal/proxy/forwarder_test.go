@@ -558,3 +558,87 @@ func TestNormalizeResponseForModeAnthropicSSE(t *testing.T) {
 		t.Fatalf("unexpected normalized anthropic sse body: %s", string(body))
 	}
 }
+
+func TestResolveEndpointOllamaAPIType(t *testing.T) {
+	got, mode, err := resolveEndpoint(store.ProviderConnection{Provider: "ollama-local", ProviderSpecificData: map[string]interface{}{"baseUrl": "http://localhost:11434", "apiType": "ollama"}}, "ollama-local/llama3.1", "/v1/chat/completions")
+	if err != nil {
+		t.Fatalf("resolve endpoint: %v", err)
+	}
+	if got != "http://localhost:11434/api/chat" || mode != "ollama" {
+		t.Fatalf("unexpected endpoint/mode: %s %s", got, mode)
+	}
+}
+
+func TestNormalizeOpenAIToOllamaBody(t *testing.T) {
+	body := map[string]interface{}{"model": "ollama-local/llama3.1", "messages": []interface{}{map[string]interface{}{"role": "user", "content": "hi"}}, "max_tokens": 128}
+	raw := normalizeOpenAIToOllamaBody(body, "ollama-local")
+	var out map[string]interface{}
+	if err := json.Unmarshal(raw, &out); err != nil {
+		t.Fatalf("decode transformed body: %v", err)
+	}
+	if out["model"] != "llama3.1" {
+		t.Fatalf("unexpected model: %#v", out)
+	}
+	if out["num_predict"] != float64(128) {
+		t.Fatalf("unexpected num_predict: %#v", out)
+	}
+	if _, ok := out["max_tokens"]; ok {
+		t.Fatalf("max_tokens should be removed: %#v", out)
+	}
+}
+
+func TestNormalizeOllamaToOpenAIResponse(t *testing.T) {
+	raw := map[string]interface{}{
+		"model":             "llama3.1",
+		"message":           map[string]interface{}{"role": "assistant", "content": "hello"},
+		"done":              true,
+		"prompt_eval_count": float64(10),
+		"eval_count":        float64(4),
+	}
+	out := normalizeOllamaToOpenAIResponse(raw)
+	choices, ok := out["choices"].([]map[string]interface{})
+	if !ok || len(choices) != 1 {
+		t.Fatalf("unexpected choices: %#v", out)
+	}
+	msg, _ := choices[0]["message"].(map[string]interface{})
+	if msg["content"] != "hello" {
+		t.Fatalf("unexpected message: %#v", msg)
+	}
+	usage, _ := out["usage"].(map[string]interface{})
+	if usage["total_tokens"] != 14 {
+		t.Fatalf("unexpected usage: %#v", usage)
+	}
+}
+
+func TestNormalizeOllamaNDJSONToOpenAI(t *testing.T) {
+	raw := []byte("{\"model\":\"llama3.1\",\"message\":{\"role\":\"assistant\",\"content\":\"Hello\"},\"done\":false}\n{\"model\":\"llama3.1\",\"done\":true,\"done_reason\":\"stop\",\"prompt_eval_count\":10,\"eval_count\":4}\n")
+	out := string(normalizeOllamaNDJSONToOpenAI(raw))
+	if !strings.Contains(out, `"object":"chat.completion.chunk"`) {
+		t.Fatalf("expected chunk object, got %s", out)
+	}
+	if !strings.Contains(out, `"content":"Hello"`) {
+		t.Fatalf("expected content chunk, got %s", out)
+	}
+	if !strings.Contains(out, `data: [DONE]`) {
+		t.Fatalf("expected done marker, got %s", out)
+	}
+}
+
+func TestNormalizeResponseForModeOllamaNDJSON(t *testing.T) {
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"Content-Type": []string{"application/x-ndjson"}},
+		Body:       io.NopCloser(strings.NewReader(`{"model":"llama3.1","message":{"role":"assistant","content":"Hi"},"done":true}`)),
+	}
+	normalized, err := normalizeResponseForMode(resp, "ollama")
+	if err != nil {
+		t.Fatalf("normalize response: %v", err)
+	}
+	body, err := io.ReadAll(normalized.Body)
+	if err != nil {
+		t.Fatalf("read body: %v", err)
+	}
+	if !strings.Contains(string(body), `"chat.completion"`) {
+		t.Fatalf("unexpected normalized ollama body: %s", string(body))
+	}
+}

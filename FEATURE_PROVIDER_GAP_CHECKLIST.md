@@ -14,7 +14,7 @@ Legend: Done = implemented and tested locally; Partial = present but not as broa
 | Gemini-compatible forwarding | 9router, CLIProxyAPI | Done | `internal/proxy/forwarder_test.go`, `internal/app/gemini_test.go` | P0 |
 | OpenAI <-> Gemini body transform | 9router, CLIProxyAPI | Done/Partial | Added request-side tools mapping and response-side Gemini `functionCall` -> OpenAI `tool_calls`; multimodal/image parts still need broader coverage | P1 |
 | OpenAI <-> Claude body transform | 9router, CLIProxyAPI | Done/Partial | Added OpenAI tools -> Anthropic tools mapping and Anthropic SSE text/tool-use -> OpenAI chunk normalization; broader multimodal parity still needs more audit | P1 |
-| Ollama format translation | 9router | Missing | 9router has Ollama translator files; no clear XRouter Ollama adapter beyond catalog names | P2 |
+| Ollama format translation | 9router | Done/Partial | Added OpenAI -> Ollama `/api/chat` request mapping plus Ollama JSON/NDJSON -> OpenAI chat response/chunk normalization; broader Ollama tool edge cases still need live testing | P2 |
 | Function/tool calling pass-through | OmniRoute, CLIProxyAPI | Done/Partial | Added translator coverage for OpenAI tool declarations to Gemini/Anthropic and Gemini function-call response normalization | P1 |
 | Multimodal text+image | CLIProxyAPI | Done/Partial | Added OpenAI text+data-URL image content translation to Gemini chat payloads; Anthropic path currently preserves text and skips image parts safely | P1 |
 | Streaming pass-through | all 3 | Done/Partial | Added Gemini and Anthropic SSE -> OpenAI `chat.completion.chunk` normalization; other provider streaming parity still needs more tests | P0 |
@@ -180,6 +180,7 @@ Legend: Done = implemented and tested locally; Partial = present but not as broa
 - `go test ./...` pass.
 - `go build ./cmd/xrouter` pass.
 - Smoke server test pass: `/api/health`, `/api/version`, `/api/settings`, `/api/models`, `/api/usage/stats`, `/dashboard`.
+
 
 
 

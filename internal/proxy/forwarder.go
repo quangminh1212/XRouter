@@ -185,6 +185,9 @@ func resolveEndpoint(c store.ProviderConnection, model, path string) (string, st
 	if apiType == "anthropic" {
 		return joinOpenAIEndpoint(baseURL, "/v1/messages"), "anthropic", nil
 	}
+	if apiType == "ollama" {
+		return joinOpenAIEndpoint(baseURL, "/api/chat"), "ollama", nil
+	}
 	if strings.Contains(model, "claude") || c.Provider == "anthropic" || strings.HasPrefix(c.Provider, "anthropic-compatible-") {
 		return joinOpenAIEndpoint(baseURL, "/v1/messages"), "anthropic", nil
 	}
@@ -440,6 +443,9 @@ func normalizeBodyForMode(body map[string]interface{}, providerHint, mode string
 	if mode == "anthropic" {
 		return normalizeOpenAIToAnthropicBody(body, providerHint)
 	}
+	if mode == "ollama" {
+		return normalizeOpenAIToOllamaBody(body, providerHint)
+	}
 	return normalizeModelForUpstream(body, providerHint)
 }
 
@@ -643,7 +649,7 @@ func normalizeOpenAIToGeminiBody(body map[string]interface{}, providerHint strin
 }
 
 func normalizeResponseForMode(resp *http.Response, mode string) (*http.Response, error) {
-	if mode != "gemini" && mode != "anthropic" {
+	if mode != "gemini" && mode != "anthropic" && mode != "ollama" {
 		return resp, nil
 	}
 	defer resp.Body.Close()
@@ -661,8 +667,10 @@ func normalizeResponseForMode(resp *http.Response, mode string) (*http.Response,
 		var body []byte
 		if mode == "gemini" {
 			body = normalizeGeminiSSEToOpenAI(raw)
-		} else {
+		} else if mode == "anthropic" {
 			body = normalizeAnthropicSSEToOpenAI(raw)
+		} else {
+			body = normalizeOllamaNDJSONToOpenAI(raw)
 		}
 		headers.Set("Content-Type", "text/event-stream")
 		return cloneResponse(resp.StatusCode, headers, body), nil
@@ -676,7 +684,12 @@ func normalizeResponseForMode(resp *http.Response, mode string) (*http.Response,
 		resp.Body = io.NopCloser(bytes.NewReader(raw))
 		return resp, nil
 	}
-	normalized := normalizeGeminiToOpenAIResponse(payload)
+	var normalized map[string]interface{}
+	if mode == "ollama" {
+		normalized = normalizeOllamaToOpenAIResponse(payload)
+	} else {
+		normalized = normalizeGeminiToOpenAIResponse(payload)
+	}
 	body, _ := json.Marshal(normalized)
 	headers.Set("Content-Type", "application/json")
 	return cloneResponse(resp.StatusCode, headers, body), nil
@@ -816,6 +829,182 @@ func openAIChunk(delta map[string]interface{}, finishReason interface{}) map[str
 			"finish_reason": finishReason,
 		}},
 	}
+}
+
+func normalizeOpenAIToOllamaBody(body map[string]interface{}, providerHint string) []byte {
+	out := cloneRequestBody(body)
+	if providerHint != "" {
+		if model, ok := out["model"].(string); ok && strings.HasPrefix(model, providerHint+"/") {
+			out["model"] = strings.TrimPrefix(model, providerHint+"/")
+		}
+	}
+	if v, ok := out["max_tokens"]; ok {
+		out["num_predict"] = v
+		delete(out, "max_tokens")
+	}
+	raw, _ := json.Marshal(out)
+	return raw
+}
+
+func normalizeOllamaToOpenAIResponse(raw map[string]interface{}) map[string]interface{} {
+	msg, _ := raw["message"].(map[string]interface{})
+	content := stringMapValue(msg, "content")
+	thinking := stringMapValue(msg, "thinking")
+	message := map[string]interface{}{"role": "assistant"}
+	if content != "" {
+		message["content"] = content
+	} else {
+		message["content"] = ""
+	}
+	if thinking != "" {
+		message["reasoning_content"] = thinking
+	}
+	if toolCalls := extractOllamaToolCalls(msg); len(toolCalls) > 0 {
+		message["tool_calls"] = toolCalls
+		if content == "" {
+			message["content"] = nil
+		}
+	}
+	finishReason := stringMapValue(raw, "done_reason")
+	if finishReason == "" {
+		finishReason = "stop"
+	}
+	if _, ok := message["tool_calls"]; ok {
+		finishReason = "tool_calls"
+	}
+	return map[string]interface{}{
+		"id":      fmt.Sprintf("chatcmpl-ollama-%d", time.Now().UnixNano()),
+		"object":  "chat.completion",
+		"created": time.Now().Unix(),
+		"model":   firstNonEmptyString(stringMapValue(raw, "model"), "ollama"),
+		"choices": []map[string]interface{}{{"index": 0, "message": message, "finish_reason": finishReason}},
+		"usage": map[string]interface{}{
+			"prompt_tokens":     intValue(raw["prompt_eval_count"]),
+			"completion_tokens": intValue(raw["eval_count"]),
+			"total_tokens":      intValue(raw["prompt_eval_count"]) + intValue(raw["eval_count"]),
+		},
+	}
+}
+
+func normalizeOllamaNDJSONToOpenAI(raw []byte) []byte {
+	lines := strings.Split(string(raw), "\n")
+	out := make([]string, 0, len(lines)+1)
+	streamID := fmt.Sprintf("chatcmpl-ollama-%d", time.Now().UnixNano())
+	created := time.Now().Unix()
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+		var chunk map[string]interface{}
+		if err := json.Unmarshal([]byte(trimmed), &chunk); err != nil {
+			continue
+		}
+		normalized := normalizeOllamaChunkToOpenAI(chunk, streamID, created)
+		if normalized == nil {
+			continue
+		}
+		encoded, err := json.Marshal(normalized)
+		if err != nil {
+			continue
+		}
+		out = append(out, "data: "+string(encoded), "")
+	}
+	out = append(out, "data: [DONE]", "")
+	return []byte(strings.Join(out, "\n"))
+}
+
+func normalizeOllamaChunkToOpenAI(raw map[string]interface{}, streamID string, created int64) map[string]interface{} {
+	message, _ := raw["message"].(map[string]interface{})
+	delta := map[string]interface{}{"role": "assistant"}
+	content := stringMapValue(message, "content")
+	if content != "" {
+		delta["content"] = content
+	}
+	if thinking := stringMapValue(message, "thinking"); thinking != "" {
+		delta["reasoning_content"] = thinking
+	}
+	if toolCalls := extractOllamaToolCalls(message); len(toolCalls) > 0 {
+		delta["tool_calls"] = toolCalls
+	}
+	finishReason := interface{}(nil)
+	if done, _ := raw["done"].(bool); done {
+		reason := stringMapValue(raw, "done_reason")
+		if reason == "" {
+			reason = "stop"
+		}
+		if reason == "tool_calls" {
+			finishReason = "tool_calls"
+		} else {
+			finishReason = reason
+		}
+		if len(delta) == 1 {
+			delta = map[string]interface{}{}
+		}
+	}
+	if len(delta) == 1 && finishReason == nil {
+		return nil
+	}
+	return map[string]interface{}{
+		"id":      streamID,
+		"object":  "chat.completion.chunk",
+		"created": created,
+		"model":   firstNonEmptyString(stringMapValue(raw, "model"), "ollama"),
+		"choices": []map[string]interface{}{{"index": 0, "delta": delta, "finish_reason": finishReason}},
+	}
+}
+
+func extractOllamaToolCalls(message map[string]interface{}) []map[string]interface{} {
+	items, _ := message["tool_calls"].([]interface{})
+	out := make([]map[string]interface{}, 0, len(items))
+	for i, rawItem := range items {
+		item, _ := rawItem.(map[string]interface{})
+		fn, _ := item["function"].(map[string]interface{})
+		name := stringMapValue(fn, "name")
+		if name == "" {
+			continue
+		}
+		args := "{}"
+		if rawArgs, ok := fn["arguments"]; ok && rawArgs != nil {
+			if encoded, err := json.Marshal(rawArgs); err == nil {
+				args = string(encoded)
+			}
+		}
+		id := stringMapValue(item, "id")
+		if id == "" {
+			id = fmt.Sprintf("call_%d", i+1)
+		}
+		out = append(out, map[string]interface{}{
+			"index":    i,
+			"id":       id,
+			"type":     "function",
+			"function": map[string]interface{}{"name": name, "arguments": args},
+		})
+	}
+	return out
+}
+
+func intValue(value interface{}) int {
+	switch v := value.(type) {
+	case float64:
+		return int(v)
+	case int:
+		return v
+	case int64:
+		return int(v)
+	default:
+		return 0
+	}
+}
+
+func firstNonEmptyString(values ...string) string {
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value != "" {
+			return value
+		}
+	}
+	return ""
 }
 func normalizeGeminiSSEToOpenAI(raw []byte) []byte {
 	lines := strings.Split(string(raw), "\n")
