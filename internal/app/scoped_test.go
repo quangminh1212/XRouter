@@ -100,6 +100,52 @@ func TestProviderScopedProxyRejectsUnsupportedPath(t *testing.T) {
 	}
 }
 
+func TestProviderScopedChatWithToolsPassesThrough(t *testing.T) {
+	srv := newTestServer(t)
+	if _, err := srv.store.UpdateSettings(map[string]interface{}{"requireApiKey": false}); err != nil {
+		t.Fatalf("disable api key auth: %v", err)
+	}
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/chat/completions" {
+			t.Fatalf("unexpected upstream path: %s", r.URL.Path)
+		}
+		var payload map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode upstream body: %v", err)
+		}
+		if payload["model"] != "gpt-4o-mini" {
+			t.Fatalf("unexpected model payload: %#v", payload)
+		}
+		tools, ok := payload["tools"].([]interface{})
+		if !ok || len(tools) != 1 {
+			t.Fatalf("unexpected tools payload: %#v", payload["tools"])
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{"id": "resp_tools"})
+	}))
+	defer upstream.Close()
+
+	_, _ = srv.store.CreateProviderConnection(store.ProviderConnection{
+		Provider: "openai",
+		Name:     "openai scoped tools",
+		AuthType: "apikey",
+		APIKey:   "x",
+		IsActive: true,
+		ProviderSpecificData: map[string]interface{}{
+			"baseUrl": upstream.URL,
+			"apiType": "openai",
+		},
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/provider/openai/v1/chat/completions", bytes.NewBufferString(`{"model":"gpt-4o-mini","messages":[{"role":"user","content":"hi"}],"tools":[{"type":"function","function":{"name":"get_weather","parameters":{"type":"object","properties":{"city":{"type":"string"}}}}}]}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestAPIV1ProviderScopedChatCompatRoute(t *testing.T) {
 	srv := newTestServer(t)
 	if _, err := srv.store.UpdateSettings(map[string]interface{}{"requireApiKey": false}); err != nil {
