@@ -206,6 +206,7 @@ func TestProviderScopedCompatRoutesCoverExtendedEndpoints(t *testing.T) {
 		{name: "image edits", path: "/api/provider/openai/v1/images/edits", method: http.MethodPost, body: `{"model":"gpt-image-1"}`, upstreamPath: "/v1/images/edits", kind: "media"},
 		{name: "image generations", path: "/api/provider/openai/v1/images/generations", method: http.MethodPost, body: `{"model":"gpt-image-1"}`, upstreamPath: "/v1/images/generations", kind: "media"},
 		{name: "video generations", path: "/api/provider/openai/v1/videos/generations", method: http.MethodPost, body: `{"model":"gpt-video-1"}`, upstreamPath: "/v1/videos/generations", kind: "media"},
+		{name: "web fetch", path: "/api/provider/openai/v1/web/fetch", method: http.MethodPost, body: `{"url":"https://example.com"}`, kind: "fetch"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -213,7 +214,7 @@ func TestProviderScopedCompatRoutesCoverExtendedEndpoints(t *testing.T) {
 			if _, err := srv.store.UpdateSettings(map[string]interface{}{"requireApiKey": false}); err != nil {
 				t.Fatalf("disable api key auth: %v", err)
 			}
-			if tt.kind != "voices" {
+			if tt.kind != "voices" && tt.kind != "fetch" {
 				upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					if r.URL.Path != tt.upstreamPath {
 						t.Fatalf("unexpected upstream path: %s", r.URL.Path)
@@ -231,6 +232,9 @@ func TestProviderScopedCompatRoutesCoverExtendedEndpoints(t *testing.T) {
 					Provider: provider, Name: provider + " scoped extended", AuthType: "apikey", APIKey: "x", IsActive: true,
 					ProviderSpecificData: map[string]interface{}{"baseUrl": upstream.URL, "apiType": apiType},
 				})
+			}
+			if tt.kind == "fetch" {
+				t.Setenv("XR_ALLOW_PRIVATE_FETCH", "1")
 			}
 			var body io.Reader
 			if tt.body != "" {
